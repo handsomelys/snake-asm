@@ -20,7 +20,25 @@ print macro p1,p2
 	mov es:[si+3],p2
 	pop si
 	endm
+	
+pushR macro
+	push ax
+	push bx
+	push cx
+	push dx
+	push si
+	push di
+	endm
 
+popR macro
+	pop di
+	pop si
+	pop dx
+	pop cx
+	pop bx
+	pop ax
+	endm
+	
 printBody macro p1,color
 	 mov ax,ds:[p1]
 	 mov dl,' '
@@ -70,10 +88,11 @@ drawCol:
 	
 .model small
 .data
-	snake_direction dw 4d00h
+	snake_direction db 4dh,00h
 	snake_body dw 400 dup(0)
 	food_position dw 0
 	snake_length dw 4
+	snake_head	dw 8
 	score dw 0
 	white equ 01110111b
 	pink equ 01010101b
@@ -83,10 +102,10 @@ drawCol:
 	blue equ 00010001b
 	black equ 00000000b
 	greenplus equ 00110011b
-	up	equ	4800h
-	down equ 5000h
-	left equ 4b00h
-	right equ 4d00h
+	up	equ	48h
+	down equ 50h
+	left equ 4bh
+	right equ 4dh
 	nscore equ 25
 	score_position equ 26
 	jblink dw 1
@@ -111,19 +130,30 @@ main proc far
 	call showScore
 	call delay	
 	call initSnake
-	mov cx,5
-l0:
-	call moveSnake
-	call delay
-	loop l0
+game:
+        push cx
+
+        call moveSnake
+
+        mov cx, 0Fh
+        aaaa1:
+            push cx
+            mov cx, 0FFFh
+            bbbb:
+                push cx
+                call getInput
+                pop cx
+                loop bbbb
+            pop cx
+            loop aaaa1
+        jmp game
+
+	
+	mov ah,4ch
+	int 21h
 main endp
 showScore proc near
-	 push ax
-	 push bx
-	 push cx
-	 push dx
-	 push si
-	 push di
+	 pushR
 	 mov dh,07h
 	 mov cx,7
 	 mov si,125	;(80*0+52)*2+1
@@ -151,22 +181,13 @@ setScore:
 	 	mov byte ptr es:[si],dl
 	 	sub si,2
 	 	loop lset
-	 pop di
-	 pop si
-	 pop dx
-	 pop cx
-	 pop bx
-	 pop ax
+	 popR
 	 ret 
 showScore endp
 initSnake proc near
-	 push ax
-	 push bx
-	 push cx
-	 push dx
-	 push si
-	 push di
-	 mov ax,0E0cH
+	 pushR
+	 mov ax,0d0eH
+	 mov di,2
 init:
 	 mov ds:[di],ax
 	 add di,2
@@ -175,7 +196,7 @@ init:
 	 mov di,2
 initBody:
 	;四段身子
-	 mov cx,4
+	 
 printSnake:
 	 
 	 mov ax,ds:[di]
@@ -186,83 +207,176 @@ printSnake:
 	 print dl,dh
 	 inc di
 	 inc di
-	 loop printSnake
+	 
+	 mov ax,ds:[di]
+	 mov dl,07h
+	 mov dh,white
+	 mov bl,al
+	 mov bh,ah
+	 print dl,dh
+	 inc di
+	 inc di
+	 
+	 mov ax,ds:[di]
+	 mov dl,07h
+	 mov dh,blue
+	 mov bl,al
+	 mov bh,ah
+	 print dl,dh
+	 inc di
+	 inc di
+	 
+	 mov ax,ds:[di]
+	 mov dl,07h
+	 mov dh,red
+	 mov bl,al
+	 mov bh,ah
+	 print dl,dh
+	 
+	 mov snake_head,di
 	;四段身子初始化结束
-	 pop di
-	 pop si
-	 pop dx
-	 pop cx
-	 pop bx
-	 pop ax
+	 popR
 	 ret
 initSnake endp
 
-movesnake proc near
-	push ax
-	push bx
-	push cx
-	push dx
-	push si
-	push di
+getInput proc near
+	pushR
+	mov al,0
+	mov ah,1
+	int 16h
+	
+	cmp ah,1
+	je endGetInput
+	
+	mov al,0
+	mov ah,0
+	int 16h
+	
+left_key:
+	cmp ah,left
+	jne right_key
+	mov bh,ds:[0]
+	cmp bh,right
+	je	endGetInput
+	mov byte ptr ds:[0],left
+	
+right_key:
+	cmp ah,right
+	jne up_key
+	mov bh,ds:[0]
+	cmp bh,left
+	je endGetInput
+	mov byte ptr ds:[0],right
+	
+up_key:
+	cmp ah,up
+	jne down_key
+	mov bh,ds:[0]
+	cmp bh,down
+	je endGetInput
+	mov byte ptr ds:[0],up
+down_key:
+	cmp ah,down
+	jne endGetInput
+	mov bh,ds:[0]
+	cmp bh,up
+	je endGetInput
+	mov byte ptr ds:[0],down
+	
+endGetInput:
+	popR
+	ret
+getInput endp
 
-	mov ax,snake_direction
-
-	mov di,snake_length
+moveSnake proc near
+	pushR
+	
+	
+	mov di,snake_head
 	sub di,2
+	cmp byte ptr ds:[0],up
+	je move_up
 	
-	cmp ax,right
-	je move_r
-move_r:
-	mov ax,ds:[di]
-	add al,1
-	jmp judgePlug
-	
-judgePlug:
-	push ax
-	cmp ah,0
-	je gameend
-	cmp ah,21
-	je gameend
-	cmp al,0
-	je gameend
-	cmp al,30
-	je gameend
-	
-	mov cx,snake_length
-	sub cx,6
-	mov di,2
+	;mov ax,snake_direction
+    cmp byte ptr ds:[0], down
+    je move_down
+
+    ;mov ax,snake_direction
+    cmp byte ptr ds:[0], left
+    je move_left
+
+    ;mov ax,snake_direction
+    cmp byte ptr ds:[0], right
+    je move_right
+    
+ 	move_up:
+        mov ax, ds:[di]
+        sub ah, 1
+        jmp checkBody
+
+    move_down:
+        mov ax, ds:[di]
+        add ah, 1
+        jmp checkBody
+    move_left:
+        mov ax, ds:[di]
+        sub al, 1
+        jmp checkBody
+
+    move_right:
+        mov ax, ds:[di]
+        add al, 1
+        ;mov ds:[di], ax
+        jmp checkBody	
+        
+checkBody: 
+
+	cmp ah, 0
+    je setGameover
+    cmp ah, 30
+    je setGameover
+    cmp al, 0
+    je setGameover
+    cmp al, 20
+    je setGameover
+    
+    mov cx, snake_head
+    sub cx, 6
+    mov di, 2
 	shr cx,1
 	
-s0:
-	mov bx,ds:[di]
-	cmp bx,ax
-	je gameend
+    s0: 
+        mov bx, ds:[di]
+        cmp bx, ax
+        je setGameover
+
+        add di, 2
+        sub cx, 1
+        loop s0
+
+backWardBody:
+	mov cx,snake_head
 	
-	add di,2
-	loop s0
-	
-	pop ax
-update:
-	mov cx,snake_length
 	sub cx,6
 	mov di,2
+	
 	shr cx,1
 	push ax
-	
 	mov dl,' '
-	mov dh,black
+	mov dh,0
 	mov bx,ds:[di]
 	print dl,dh
-	
-s5:
-	mov dx,ds:[di+2]
-	mov ds:[di],dx
-	add di,2
-	loop s5
-	
-	mov dl,' '
-	mov dh,71h
-	mov bx,ds:[di]
+
+s5: 
+        mov dx, ds:[di+2]
+        mov ds:[di], dx
+
+        add di, 2
+        loop s5
+
+    mov dl, ' ';字符
+    mov dh, 71h;颜色
+    mov bx, ds:[di]	
 	print dl,dh
 	
 	pop ax
@@ -271,16 +385,17 @@ s5:
 	mov dh,44h
 	mov bx,ds:[di]
 	print dl,dh
+	jmp endMove
 
-gameend:
- 	 pop di
-	 pop si
-	 pop dx
-	 pop cx
-	 pop bx
-	 pop ax
+setGameover:
+	mov gameover,1
+	
+endMove:
+ 	popR
 	ret
-movesnake endp
+moveSnake endp
+
+
 
 delay proc near
 delayed_one_second:
@@ -294,7 +409,7 @@ delayed_one_second:
 	mov si,46ch
 	lodsw
 	;设置时延
-	add ax,1
+	add ax,3
 	mov cx,ax
 	_delayed_one_second:
 	mov si,46ch
@@ -312,6 +427,11 @@ delayed_one_second:
 delay endp
 
 end start
+
+
+
+
+
 
 
 
