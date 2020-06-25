@@ -171,7 +171,8 @@ printSnake:
 	 mov bl,al
 	 mov bh,ah
 	 call print
-	 
+	 inc di
+	 inc di
 	 mov snake_head,di
 	;四段身子初始化结束
 	 popR
@@ -272,15 +273,15 @@ checkBody:
 
 	cmp ah, 0
     je setGameover
-    cmp ah, 30
+    cmp ah, 20
     je setGameover
     cmp al, 0
     je setGameover
-    cmp al, 20
+    cmp al, 30
     je setGameover
     
     mov cx, snake_head
-    sub cx, 6
+    sub cx, 4
     mov di, 2
 	shr cx,1
 	
@@ -296,7 +297,7 @@ checkBody:
 backWardBody:
 	mov cx,snake_head
 	
-	sub cx,6
+	sub cx,4
 	mov di,2
 	
 	shr cx,1
@@ -311,7 +312,7 @@ s5:
         mov ds:[di], dx
 
         add di, 2
-
+		
         loop s5
 
     mov dl, ' ';字符
