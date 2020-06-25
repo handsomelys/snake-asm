@@ -85,13 +85,13 @@ drawCol:
 	pop cx
 	loop drawCol
 	endm
-	
+
 .model small
 .data
 	snake_direction db 4dh,00h
 	snake_body dw 400 dup(0)
 	food_position dw 0
-	snake_length dw 4
+	snake_body_length dw 3
 	snake_head	dw 8
 	score dw 0
 	white equ 01110111b
@@ -106,8 +106,6 @@ drawCol:
 	down equ 50h
 	left equ 4bh
 	right equ 4dh
-	nscore equ 25
-	score_position equ 26
 	jblink dw 1
 	gameover dw 0
 .code
@@ -128,8 +126,12 @@ main proc far
 	
 	
 	call showScore
-	call delay	
+	
 	call initSnake
+	
+	mov ax,snake_body_length
+	call outputOct
+
 game:
         push cx
 
@@ -141,14 +143,13 @@ game:
             mov cx, 0FFFh
             bbbb:
                 push cx
-                call getInput
+                ;call getInput
                 pop cx
                 loop bbbb
             pop cx
             loop aaaa1
         jmp game
-
-	
+			
 	mov ah,4ch
 	int 21h
 main endp
@@ -169,16 +170,16 @@ setScoreFont:
 	 mov byte ptr es:[134],'e'
 	 mov byte ptr es:[136],':'
 setScore: 
-	 mov ax,score
-	 xor cx,cx
+	 mov ax,100
 	 mov cx,5
-	 mov si,148
-	 mov di,10
+	 mov si,146
+	 mov bx,10
 	 lset:
-	 	xor dx,dx
-	 	div di
+	 	mov dx,0
+	 	div bx
 	 	add dl,30h
 	 	mov byte ptr es:[si],dl
+	 	mov byte ptr es:[si+1],00000111b
 	 	sub si,2
 	 	loop lset
 	 popR
@@ -186,6 +187,7 @@ setScore:
 showScore endp
 initSnake proc near
 	 pushR
+	 mov byte ptr ds:[0],right
 	 mov ax,0d0eH
 	 mov di,2
 init:
@@ -346,12 +348,12 @@ checkBody:
 	shr cx,1
 	
     s0: 
-        mov bx, ds:[di]
-        cmp bx, ax
+        
+        cmp ds:[di], ax
         je setGameover
 
         add di, 2
-        sub cx, 1
+
         loop s0
 
 backWardBody:
@@ -363,15 +365,16 @@ backWardBody:
 	shr cx,1
 	push ax
 	mov dl,' '
-	mov dh,0
+	mov dh,yellow
 	mov bx,ds:[di]
-	print dl,dh
+	print dl,dh	;走不到这步
 
 s5: 
         mov dx, ds:[di+2]
         mov ds:[di], dx
 
         add di, 2
+
         loop s5
 
     mov dl, ' ';字符
@@ -426,7 +429,33 @@ delayed_one_second:
 	ret
 delay endp
 
+outputOct proc near
+	pushR
+	
+	xor cx,cx
+l1:
+	xor dx,dx
+	mov si,10
+	div si
+	push dx
+	inc cx
+	cmp ax,0
+	jne l1
+l2:
+	pop dx
+	add dl,30h
+	mov si,381
+	mov dh,white
+	mov es:[si],dl
+	mov es:[si+1],dh
+	
+	add si,2	
+	loop l2
+	popR
+	ret
+outputOct endp
 end start
+
 
 
 
