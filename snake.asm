@@ -4,23 +4,7 @@ clearScreen macro
 	mov al,03h
 	int 10h
 	endm
-print macro p1,p2
-	mov al,80
-	mul bh
-	xor bh,bh
-	shl bl,1
-	add ax,bx
-	
-	push si
-	mov si,ax
-	shl si,1
-	mov es:[si],p1
-	mov es:[si+1],p2
-	mov es:[si+2],p1
-	mov es:[si+3],p2
-	pop si
-	endm
-	
+
 pushR macro
 	push ax
 	push bx
@@ -37,53 +21,6 @@ popR macro
 	pop cx
 	pop bx
 	pop ax
-	endm
-	
-printBody macro p1,color
-	 mov ax,ds:[p1]
-	 mov dl,' '
-	 mov dh,color
-	 mov bl,al
-	 mov bh,ah
-	 print dl,dh
-	endm
-setRowBackground macro p1,p2,p3,p4,p5,p6
-	mov dl,p1
-	mov dh,p2
-	mov bl,p3
-	mov bh,p4
-	mov cx,p5
-drawRow:
-	push cx
-	push bx
-	print dl,dh
-	pop bx
-	push bx
-	add bh,p6
-	print dl,dh
-	pop bx
-	inc bl
-	pop cx
-	loop drawRow
-	endm
-setColBackground macro p1,p2,p3,p4,p5,p6
-	mov dl,p1
-	mov dh,p2
-	mov bl,p3
-	mov bh,p4
-	mov cx,p5
-drawCol:
-	push cx
-	push bx
-	print dl,dh
-	pop bx
-	push bx
-	add bl,p6
-	print dl,dh
-	pop bx
-	inc bh
-	pop cx
-	loop drawCol
 	endm
 
 .model small
@@ -120,9 +57,9 @@ main proc far
 	
 	clearScreen
 	;设置地图上下边界
-	setRowBackground ' ',white,0,0,30,20
+	call setRowBackground 
 	;设置地图左右边界
-	setColBackground ' ',white,0,0,21,30
+	call setColBackground 
 	
 	
 	call showScore
@@ -130,7 +67,7 @@ main proc far
 	call initSnake
 	
 	mov ax,snake_body_length
-	call outputOct
+	;call outputOct
 
 game:
         push cx
@@ -143,7 +80,7 @@ game:
             mov cx, 0FFFh
             bbbb:
                 push cx
-                ;call getInput
+                call getInput
                 pop cx
                 loop bbbb
             pop cx
@@ -170,7 +107,7 @@ setScoreFont:
 	 mov byte ptr es:[134],'e'
 	 mov byte ptr es:[136],':'
 setScore: 
-	 mov ax,100
+	 mov ax,score
 	 mov cx,5
 	 mov si,146
 	 mov bx,10
@@ -203,10 +140,10 @@ printSnake:
 	 
 	 mov ax,ds:[di]
 	 mov dl,07h
-	 mov dh,greenplus
+	 mov dh,white
 	 mov bl,al
 	 mov bh,ah
-	 print dl,dh
+	 call print
 	 inc di
 	 inc di
 	 
@@ -215,16 +152,16 @@ printSnake:
 	 mov dh,white
 	 mov bl,al
 	 mov bh,ah
-	 print dl,dh
+	 call print
 	 inc di
 	 inc di
 	 
 	 mov ax,ds:[di]
 	 mov dl,07h
-	 mov dh,blue
+	 mov dh,white
 	 mov bl,al
 	 mov bh,ah
-	 print dl,dh
+	 call print
 	 inc di
 	 inc di
 	 
@@ -233,7 +170,7 @@ printSnake:
 	 mov dh,red
 	 mov bl,al
 	 mov bh,ah
-	 print dl,dh
+	 call print
 	 
 	 mov snake_head,di
 	;四段身子初始化结束
@@ -365,9 +302,9 @@ backWardBody:
 	shr cx,1
 	push ax
 	mov dl,' '
-	mov dh,yellow
+	mov dh,black
 	mov bx,ds:[di]
-	print dl,dh	;走不到这步
+	call print	;走不到这步
 
 s5: 
         mov dx, ds:[di+2]
@@ -378,16 +315,16 @@ s5:
         loop s5
 
     mov dl, ' ';字符
-    mov dh, 71h;颜色
+    mov dh, white;颜色
     mov bx, ds:[di]	
-	print dl,dh
+	call print
 	
 	pop ax
 	mov ds:[di],ax
 	mov dl,' '
-	mov dh,44h
+	mov dh,red
 	mov bx,ds:[di]
-	print dl,dh
+	call print
 	jmp endMove
 
 setGameover:
@@ -454,15 +391,70 @@ l2:
 	popR
 	ret
 outputOct endp
+
+print proc near
+	pushR
+	mov al,80
+	mul bh
+	xor bh,bh
+	shl bl,1
+	add ax,bx
+	
+	push si
+	mov si,ax
+	shl si,1
+	mov es:[si],dl
+	mov es:[si+1],dh
+	mov es:[si+2],dl
+	mov es:[si+3],dh
+	pop si
+	popR
+	ret
+print endp
+
+setRowBackground proc 
+	pushR
+	mov dl,' '
+	mov dh,white
+	mov bl,0
+	mov bh,0
+	mov cx,30
+drawRow:
+	push cx
+	push bx
+	call print
+	pop bx
+	push bx
+	add bh,20
+	call print
+	pop bx
+	inc bl
+	pop cx
+	loop drawRow
+	popR
+	ret
+setRowBackground endp
+setColBackground proc near
+	pushR
+	mov dl,' ' 
+	mov dh,white
+	mov bl,0
+	mov bh,0
+	mov cx,21
+drawCol:
+	push cx
+	push bx
+	call print
+	pop bx
+	push bx
+	add bl,30
+	call print
+	pop bx
+	inc bh
+	pop cx
+	loop drawCol
+	popR
+	ret
+setColBackground endp
 end start
-
-
-
-
-
-
-
-
-
-
 
