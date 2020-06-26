@@ -50,15 +50,19 @@ data segment
 	right equ 4dh
 	jblink dw 1
 	gameover dw 0
-	speed dw 05fffh
+	speed dw 04abch
 	food_get dw 0
 	acceleration dw 0
 	speed_level dw 0
+	integral dw 0
+	color dw 0
 data ends
 code segment
 assume ds:data,cs:code,ss:stack
 start:
 main proc far
+
+game:
 	mov ax,data
 	mov ds,ax
 	mov ax,stack
@@ -87,31 +91,27 @@ main proc far
 	;mov ax,snake_body_length
 	;call outputOct body_length,382
 	call showSpeed
-game:		
-		push ax
-		mov ax,gameover
-		cmp ax,1
+game1:		
+		cmp gameover,1
 		je	endgame
-		pop ax
         call moveSnake
-       
+        
 		call delayInput
 		call showScore
 		;call showSpeed
-		push ax
-		push bx
-		mov ax,score
-		mov bl,10
-		div bl
-		cmp ah,0
-		jne game
+		cmp integral,5
+		je accelerate
+
+		jne game1
 accelerate:
-		sub speed,10h	
+		sub speed,100h	
 		inc speed_level
-		pop ax
+		mov integral,0
 		call showSpeed
-        jmp game
-endgame:			
+        jmp game1
+endgame:	
+	clearScreen	
+	call showScore	
 	mov ah,4ch
 	int 21h
 main endp
@@ -315,7 +315,23 @@ checkout:
 
 
 	mov bx,food_position
-
+	
+	
+	push ax
+	push bx
+	xor bx,bx 
+	mov bx,food_position
+	xor ax,ax
+	mov al,bh
+	mov di,500
+	call outputDec
+	 
+	xor ax,ax
+	mov al,bl
+	mov di,506
+	call outputDec
+	pop bx
+	pop ax
 	
 	cmp ax,bx	
 		
@@ -376,8 +392,13 @@ getFood:
 	add di,2
 	mov snake_head,di
 	add score,10
-	
-	
+	inc integral
+	cmp integral,5
+	ja	zeroing
+	jmp continue
+zeroing:
+	mov integral,0
+continue:
 	call generateFood
 	jmp endMove
 	
@@ -419,7 +440,8 @@ setFoodPosition:
 	mov dh,blue
 
 	call print
-
+	
+	
 	popR
 	ret
 generateFood endp
@@ -508,15 +530,13 @@ getRow:
 	int 1ah
 	mov ax,dx
 	and ah,3
-	mov dl,18
+	mov dl,19
 	div dl
 	;ah¥Ê”‡ ˝
-	
-	
     
     cmp ah,1
     jb getRow
-    cmp ah,19
+    cmp ah,18
     ja getRow
     mov byte ptr food_position+1,ah
 getCol:	
@@ -525,13 +545,13 @@ getCol:
 	int 1ah
 	mov ax,dx
 	and ah,3
-	mov dl,28
+	mov dl,38
 	div dl
 	;ah¥Ê”‡ ˝
 	
 	cmp ah,1
 	jb getCol
-	cmp ah,28
+	cmp ah,37
 	ja getCol
 	mov byte ptr food_position,ah
 popR
@@ -593,6 +613,9 @@ setSpeed:
 	popR
 	ret
 showSpeed endp
+
+
+
 
 code ends
 end start
