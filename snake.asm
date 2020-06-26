@@ -32,7 +32,7 @@ stack ends
 data segment
 	snake_direction db 4dh,00h
 	snake_body dw 400 dup(0)
-	food_position dw 0a0ah
+	food_position dw 0
 	snake_body_length dw 3
 	snake_head	dw 8
 	score dw 0
@@ -50,8 +50,10 @@ data segment
 	right equ 4dh
 	jblink dw 1
 	gameover dw 0
-	speed dw 03fffh
+	speed dw 05fffh
 	food_get dw 0
+	acceleration dw 0
+	speed_level dw 0
 data ends
 code segment
 assume ds:data,cs:code,ss:stack
@@ -84,13 +86,32 @@ main proc far
 	call generateFood
 	;mov ax,snake_body_length
 	;call outputOct body_length,382
-
+	call showSpeed
 game:		
-
+		push ax
+		mov ax,gameover
+		cmp ax,1
+		je	endgame
+		pop ax
         call moveSnake
+       
 		call delayInput
+		call showScore
+		;call showSpeed
+		push ax
+		push bx
+		mov ax,score
+		mov bl,10
+		div bl
+		cmp ah,0
+		jne game
+accelerate:
+		sub speed,10h	
+		inc speed_level
+		pop ax
+		call showSpeed
         jmp game
-			
+endgame:			
 	mov ah,4ch
 	int 21h
 main endp
@@ -98,38 +119,32 @@ showScore proc near
 	 pushR
 	 mov dh,07h
 	 mov cx,7
-	 mov si,125	;(80*0+52)*2+1
+	 ;mov si,125	;(80*0+52)*2+1
+	 mov si,3521	;22*80*2+1
 setColorForScore:
 	 mov es:[si],dh
 	 add si,2
 	 loop setColorForScore
 setScoreFont:
-	 mov byte ptr es:[126],'s'
-	 mov byte ptr es:[128],'c'
-	 mov byte ptr es:[130],'o'
-	 mov byte ptr es:[132],'r'
-	 mov byte ptr es:[134],'e'
-	 mov byte ptr es:[136],':'
+	 mov byte ptr es:[3522],'s'
+	 mov byte ptr es:[3524],'c'
+	 mov byte ptr es:[3526],'o'
+	 mov byte ptr es:[3528],'r'
+	 mov byte ptr es:[3530],'e'
+	 mov byte ptr es:[3532],':'
 setScore: 
 	 mov ax,score
-	 mov cx,5
-	 mov si,146
-	 mov bx,10
-	 lset:
-	 	mov dx,0
-	 	div bx
-	 	add dl,30h
-	 	mov byte ptr es:[si],dl
-	 	mov byte ptr es:[si+1],00000111b
-	 	sub si,2
-	 	loop lset
+	 push di
+	 mov di,3536
+	 call outputDec
+	 pop di
 	 popR
 	 ret 
 showScore endp
 initSnake proc near
 	 pushR
 	 mov byte ptr ds:[0],right
-	 mov ax,0d0eH
+	 mov ax,0808H
 	 mov di,2
 init:
 	 mov ds:[di],ax
@@ -143,7 +158,7 @@ initBody:
 printSnake:
 	 
 	 mov ax,ds:[di]
-	 mov dl,07h
+	 mov dl,' '
 	 mov dh,white
 	 mov bl,al
 	 mov bh,ah
@@ -152,7 +167,7 @@ printSnake:
 	 inc di
 	 
 	 mov ax,ds:[di]
-	 mov dl,07h
+	 mov dl,' '
 	 mov dh,white
 	 mov bl,al
 	 mov bh,ah
@@ -161,7 +176,7 @@ printSnake:
 	 inc di
 	 
 	 mov ax,ds:[di]
-	 mov dl,07h
+	 mov dl,' '
 	 mov dh,white
 	 mov bl,al
 	 mov bh,ah
@@ -170,7 +185,7 @@ printSnake:
 	 inc di
 	 
 	 mov ax,ds:[di]
-	 mov dl,07h
+	 mov dl,' '
 	 mov dh,red
 	 mov bl,al
 	 mov bh,ah
@@ -255,33 +270,33 @@ moveSnake proc near
     
  	move_up:
         mov ax, ds:[di]
-        sub ah, 1
-        jmp checkBody
+        sub ax,0100h
+        jmp checkout
 
     move_down:
         mov ax, ds:[di]
-        add ah, 1
-        jmp checkBody
+        add ax,0100h
+        jmp checkout
     move_left:
         mov ax, ds:[di]
-        sub al, 1
-        jmp checkBody
+        sub ax,0001h
+        jmp checkout
 
     move_right:
         mov ax, ds:[di]
-        add al, 1
+        add ax,0001h
         ;mov ds:[di], ax
-        jmp checkBody	
+        jmp checkout	
         
-checkBody: 
+checkout: 
 
 	cmp ah, 0
     je setGameover
-    cmp ah, 20
+    cmp ah, 21
     je setGameover
     cmp al, 0
     je setGameover
-    cmp al, 30
+    cmp al, 39
     je setGameover
     
     mov cx, snake_head
@@ -301,18 +316,13 @@ checkBody:
 
 	mov bx,food_position
 
-	cmp ax,bx	;跳不过去
+	
+	cmp ax,bx	
 		
 	je getFood
 	
 	;jmp backWardBody
-	push ax
-	push di
-	mov ax,food_get
-	mov di,384
-	call outputDec
-	pop di
-	pop ax
+	
 backWardBody:
 	mov cx,snake_head
 	
@@ -330,7 +340,7 @@ s5:
         mov ds:[di], dx
 
         add di, 2
-		
+
         loop s5
 
     mov dl, ' ';字符
@@ -365,7 +375,7 @@ getFood:
 	
 	add di,2
 	mov snake_head,di
-	mov food_get,1
+	add score,10
 	
 	
 	call generateFood
@@ -402,21 +412,14 @@ setFoodPosition:
 	loop scan
 	
 	mov ax,food_position
-	;mov al,0
-	;mov di,384
-	;call outputDec
-	
-	;mov ax,food_position
-	;mov ah,0
-	;mov di,388
-	;call outputDec 
-	
-	mov bh,byte ptr food_position
-	mov bl,byte ptr food_position+1
+
+	mov bl,byte ptr food_position
+	mov bh,byte ptr food_position+1
 	mov dl,' '
 	mov dh,blue
 
 	call print
+
 	popR
 	ret
 generateFood endp
@@ -445,17 +448,17 @@ print endp
 setRowBackground proc 
 	pushR
 	mov dl,' '
-	mov dh,white
+	mov dh,greenplus
 	mov bl,0
 	mov bh,0
-	mov cx,30
+	mov cx,39
 drawRow:
 	push cx
 	push bx
 	call print
 	pop bx
 	push bx
-	add bh,20
+	add bh,21
 	call print
 	pop bx
 	inc bl
@@ -467,17 +470,17 @@ setRowBackground endp
 setColBackground proc near
 	pushR
 	mov dl,' ' 
-	mov dh,white
+	mov dh,greenplus
 	mov bl,0
 	mov bh,0
-	mov cx,21
+	mov cx,22
 drawCol:
 	push cx
 	push bx
 	call print
 	pop bx
 	push bx
-	add bl,30
+	add bl,39
 	call print
 	pop bx
 	inc bh
@@ -499,34 +502,38 @@ delayInput endp
 
 getRandPosition proc near
 pushR
-getCol:
+getRow:
 
-	mov ax,0h
-	out 43h,al
-	in al,40h
-	in al,40h
-	in al,40h
-	
-	mov bl,28
-	div bl
-	mov al,ah
 	mov ah,0
-	inc al
-    mov byte ptr food_position+1,al
-getRow:	
-	mov ax,0h
-	out 43h,al
-	in al,40h
-	in al,40h
-	in al,40h
+	int 1ah
+	mov ax,dx
+	and ah,3
+	mov dl,18
+	div dl
+	;ah存余数
 	
-	mov bl,18
-	div bl
-	mov al,ah
+	
+    
+    cmp ah,1
+    jb getRow
+    cmp ah,19
+    ja getRow
+    mov byte ptr food_position+1,ah
+getCol:	
+
 	mov ah,0
-	inc al
+	int 1ah
+	mov ax,dx
+	and ah,3
+	mov dl,28
+	div dl
+	;ah存余数
 	
-	mov byte ptr food_position,al
+	cmp ah,1
+	jb getCol
+	cmp ah,28
+	ja getCol
+	mov byte ptr food_position,ah
 popR
 	ret
 	
@@ -559,5 +566,34 @@ l2:
 	 ret
 outputDec endp
 
+showSpeed proc near
+	pushR
+	mov si,3681	;23*80*2+1
+setSpeedFont:
+	 mov byte ptr es:[3682],'s'
+	 mov byte ptr es:[3683],07h
+	 mov byte ptr es:[3684],'p'
+	 mov byte ptr es:[3685],07h
+	 mov byte ptr es:[3686],'e'
+	 mov byte ptr es:[3687],07h
+	 mov byte ptr es:[3688],'e'
+	 mov byte ptr es:[3689],07h
+	 mov byte ptr es:[3690],'d'
+	 mov byte ptr es:[3691],07h
+	 mov byte ptr es:[3692],':'
+	 mov byte ptr es:[3693],07h
+setSpeed: 
+	 mov ax,speed_level
+	 push di
+	 mov di,3696
+	 call outputDec
+	 pop di
+	 popR
+	 ret 
+	popR
+	ret
+showSpeed endp
+
 code ends
 end start
+
