@@ -23,11 +23,16 @@ popR macro
 	pop ax
 	endm
 
-.model small
-.data
+
+stack segment
+dw	80 dup (0)
+top label word
+stack ends
+
+data segment
 	snake_direction db 4dh,00h
 	snake_body dw 400 dup(0)
-	food_position dw 0
+	food_position dw 0a0ah
 	snake_body_length dw 3
 	snake_head	dw 8
 	score dw 0
@@ -45,9 +50,19 @@ popR macro
 	right equ 4dh
 	jblink dw 1
 	gameover dw 0
-.code
+	speed dw 03fffh
+	food_get dw 0
+data ends
+code segment
+assume ds:data,cs:code,ss:stack
 start:
 main proc far
+	mov ax,data
+	mov ds,ax
+	mov ax,stack
+	mov ss,ax
+	lea sp,top
+	
 	mov ax,0b800h
 	mov es,ax	;直接写屏
 	
@@ -66,25 +81,14 @@ main proc far
 	
 	call initSnake
 	
-	mov ax,snake_body_length
-	;call outputOct
+	call generateFood
+	;mov ax,snake_body_length
+	;call outputOct body_length,382
 
-game:
-        push cx
+game:		
 
         call moveSnake
-
-        mov cx, 0Fh
-        aaaa1:
-            push cx
-            mov cx, 0FFFh
-            bbbb:
-                push cx
-                call getInput
-                pop cx
-                loop bbbb
-            pop cx
-            loop aaaa1
+		call delayInput
         jmp game
 			
 	mov ah,4ch
@@ -294,6 +298,21 @@ checkBody:
 
         loop s0
 
+
+	mov bx,food_position
+
+	cmp ax,bx	;跳不过去
+		
+	je getFood
+	
+	;jmp backWardBody
+	push ax
+	push di
+	mov ax,food_get
+	mov di,384
+	call outputDec
+	pop di
+	pop ax
 backWardBody:
 	mov cx,snake_head
 	
@@ -305,8 +324,7 @@ backWardBody:
 	mov dl,' '
 	mov dh,black
 	mov bx,ds:[di]
-	call print	;走不到这步
-
+	call print	
 s5: 
         mov dx, ds:[di+2]
         mov ds:[di], dx
@@ -328,70 +346,81 @@ s5:
 	call print
 	jmp endMove
 
+getFood:
+	mov dl,' '
+	mov dh,white
+	mov di,snake_head
+	sub di,2
+	mov bx,ds:[di]
+	call print
+	
+	mov di,snake_head
+	mov ax,food_position
+	mov ds:[di],ax
+	
+	mov dl,' '
+	mov dh,red
+	mov bx,ds:[di]
+	call print
+	
+	add di,2
+	mov snake_head,di
+	mov food_get,1
+	
+	
+	call generateFood
+	jmp endMove
+	
 setGameover:
 	mov gameover,1
 	
 endMove:
+	;call generateFood
  	popR
 	ret
 moveSnake endp
 
 
-
-delay proc near
-delayed_one_second:
-	push ax
-	push ds
-	push si
-	push cx
-	 
-	mov ax,0
-	mov ds,ax
-	mov si,46ch
-	lodsw
-	;设置时延
-	add ax,3
-	mov cx,ax
-	_delayed_one_second:
-	mov si,46ch
-	lodsw
-	cmp ax,cx
-	jnb _delayed_over
-	jmp _delayed_one_second
-	 
-	_delayed_over:
-	pop cx
-	pop si
-	pop ds
-	pop ax
-	ret
-delay endp
-
-outputOct proc near
+generateFood proc near
 	pushR
+setFoodPosition:
 	
-	xor cx,cx
-l1:
-	xor dx,dx
-	mov si,10
-	div si
-	push dx
-	inc cx
-	cmp ax,0
-	jne l1
-l2:
-	pop dx
-	add dl,30h
-	mov si,381
-	mov dh,white
-	mov es:[si],dl
-	mov es:[si+1],dh
+	call getRandPosition
+	mov cx,snake_head
 	
-	add si,2	
-	loop l2
+	sub cx,4
+	mov di,2
+	shr cx,1
+
+
+	scan:
+		mov ax,ds:[di]
+		cmp ax,food_position
+		jz setFoodPosition
+		inc di
+		inc di
+	loop scan
+	
+	mov ax,food_position
+	;mov al,0
+	;mov di,384
+	;call outputDec
+	
+	;mov ax,food_position
+	;mov ah,0
+	;mov di,388
+	;call outputDec 
+	
+	mov bh,byte ptr food_position
+	mov bl,byte ptr food_position+1
+	mov dl,' '
+	mov dh,blue
+
+	call print
 	popR
 	ret
-outputOct endp
+generateFood endp
+
 
 print proc near
 	pushR
@@ -457,5 +486,78 @@ drawCol:
 	popR
 	ret
 setColBackground endp
-end start
 
+delayInput proc near
+	pushR
+	mov cx,speed
+	input:
+		call getInput
+		loop input
+	popR
+	ret
+delayInput endp
+
+getRandPosition proc near
+pushR
+getCol:
+
+	mov ax,0h
+	out 43h,al
+	in al,40h
+	in al,40h
+	in al,40h
+	
+	mov bl,28
+	div bl
+	mov al,ah
+	mov ah,0
+	inc al
+    mov byte ptr food_position+1,al
+getRow:	
+	mov ax,0h
+	out 43h,al
+	in al,40h
+	in al,40h
+	in al,40h
+	
+	mov bl,18
+	div bl
+	mov al,ah
+	mov ah,0
+	inc al
+	
+	mov byte ptr food_position,al
+popR
+	ret
+	
+getRandPosition endp
+
+outputDec proc near
+	 pushR
+	 ;di作为输出的参数
+	 xor cx,cx
+l1:
+	 xor dx,dx
+	 mov si,10
+	 div si
+	 push dx
+	 inc cx
+	 cmp ax,0
+	 jne l1
+l2:
+	 pop dx
+	 add dl,30h
+	 ;mov si,382
+	 mov dh,00000111b
+	 
+	 mov es:[di],dl
+	 mov es:[di+1],dh
+	 
+	 add di,2 
+	 loop l2
+	 popR
+	 ret
+outputDec endp
+
+code ends
+end start
