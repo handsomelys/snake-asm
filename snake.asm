@@ -25,7 +25,6 @@ popR macro
 	pop ax
 	endm
 
-
 stack segment
 dw	80 dup (0)
 top label word
@@ -49,6 +48,9 @@ data segment
 	blue equ 00010001b
 	black equ 00000000b
 	greenplus equ 00110011b
+	block_shape_C equ " "
+	block_shape_R equ " "
+	block_color equ red
 	current_color db 0
 	up	equ	48h
 	down equ 50h
@@ -91,7 +93,6 @@ init:
 	;Navigate to snake_body to initialize snake
 	mov si,2	
 	mov cx,4
-
 	
 	clearScreen
 	;Set map
@@ -376,7 +377,7 @@ s5:
 	cmp color,0
 	je	white_color
 	cmp color,1
-	je	blue_color
+	je	yellow_color
 	cmp color,2
 	je	greenplus_color
 	cmp color,3
@@ -400,9 +401,9 @@ white_color:
 	call print
 	mov current_color,white
 	jmp endMove
-blue_color:	
+yellow_color:	
     mov dl, ' '
-    mov dh, blue
+    mov dh, yellow
     mov bx, ds:[di]	
 	call print
 	
@@ -412,7 +413,7 @@ blue_color:
 	mov dh,red
 	mov bx,ds:[di]
 	call print
-	mov current_color,blue
+	mov current_color,yellow
 	jmp endMove
 greenplus_color:	
     mov dl, ' '
@@ -507,7 +508,6 @@ setFoodPosition:
 	mov di,2
 	shr cx,1
 
-
 	scan:
 		mov ax,ds:[di]
 		;If coincident, then restart the segment
@@ -526,7 +526,6 @@ setFoodPosition:
 	mov dh,blue
 
 	call print
-	
 	
 	popR
 	ret
@@ -565,8 +564,8 @@ setRowBackground proc
 	;Loop to draw the background symmetrically
 	;The setColBackground's algorithm is the same
 	pushR
-	mov dl,' '
-	mov dh,greenplus
+	mov dl,block_shape_R
+	mov dh,block_color
 	mov bl,0
 	mov bh,0
 	mov cx,39
@@ -588,8 +587,8 @@ setRowBackground endp
 setColBackground proc near
 	;The proc for set the col of background
 	pushR
-	mov dl,' ' 
-	mov dh,greenplus
+	mov dl,block_shape_C
+	mov dh,block_color
 	mov bl,0
 	mov bh,0
 	mov cx,22
