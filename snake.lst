@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler Version 6.11		    06/27/20 11:40:35
+Microsoft (R) Macro Assembler Version 6.11		    06/27/20 11:57:12
 tempfile.asm						     Page 1 - 1
 
 
@@ -46,7 +46,7 @@ tempfile.asm						     Page 1 - 1
         0000
        ]
  0322 0000				food_position dw 0
- 0324 0003				snake_body_length dw 3
+ 0324 0000				snake_body_length dw 0
  0326 0008				snake_head	dw 8
  0328 0000				score dw 0
  = 0077					white equ 01110111b
@@ -568,7 +568,7 @@ tempfile.asm						     Page 1 - 1
  02F8  E8 00C9				call getRandPosition
  02FB  8B 0E 0326 R			mov cx,snake_head
 					
- 02FF  83 E9 04				sub cx,4
+ 02FF  83 E9 02				sub cx,2
  0302  BF 0002				mov di,2
  0305  D1 E9				shr cx,1
 
@@ -1008,7 +1008,7 @@ tempfile.asm						     Page 1 - 1
 
 
 
-Microsoft (R) Macro Assembler Version 6.11		    06/27/20 11:40:35
+Microsoft (R) Macro Assembler Version 6.11		    06/27/20 11:57:12
 tempfile.asm						     Symbols 2 - 1
 
 

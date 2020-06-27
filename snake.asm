@@ -38,7 +38,7 @@ data segment
 	snake_direction db 4dh,00h
 	snake_body dw 400 dup(0)
 	food_position dw 0
-	snake_body_length dw 3
+	snake_body_length dw 0
 	snake_head	dw 8
 	score dw 0
 	white equ 01110111b
@@ -503,7 +503,7 @@ setFoodPosition:
 	call getRandPosition
 	mov cx,snake_head
 	
-	sub cx,4
+	sub cx,2
 	mov di,2
 	shr cx,1
 
