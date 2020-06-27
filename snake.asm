@@ -1,11 +1,12 @@
 clearScreen macro
-	;25*80分辨率
+	;25*80 resolution
 	mov ah,00h
 	mov al,03h
 	int 10h
 	endm
 
 pushR macro
+	;Macro of push all R into stack
 	push ax
 	push bx
 	push cx
@@ -15,6 +16,7 @@ pushR macro
 	endm
 
 popR macro
+	;Macro of pop all R from stack
 	pop di
 	pop si
 	pop dx
@@ -27,9 +29,12 @@ popR macro
 stack segment
 dw	80 dup (0)
 top label word
+
 stack ends
 
 data segment
+	;Set data structure
+	
 	snake_direction db 4dh,00h
 	snake_body dw 400 dup(0)
 	food_position dw 0
@@ -44,6 +49,7 @@ data segment
 	blue equ 00010001b
 	black equ 00000000b
 	greenplus equ 00110011b
+	current_color db 0
 	up	equ	48h
 	down equ 50h
 	left equ 4bh
@@ -56,49 +62,61 @@ data segment
 	speed_level dw 0
 	integral dw 0
 	color dw 0
+	chgdirection dw 0
+	string0 db 'Your score is:'
+	nstring0 equ $-string0
+	szgameover db 'Game Over!'
+	nszgameover equ $-szgameover
+	string1 db 'You have got point :'
+	nstring1 equ $-string1
+	string2 db 'Current speed is:'
+	nstring2 equ $-string2
+	
 data ends
 code segment
 assume ds:data,cs:code,ss:stack
 start:
 main proc far
 
-game:
+init:
+	;Init
 	mov ax,data
 	mov ds,ax
 	mov ax,stack
 	mov ss,ax
 	lea sp,top
-	
+	;Write the screen directly
 	mov ax,0b800h
-	mov es,ax	;直接写屏
-	
-	mov si,2	;定位到body 初始化蛇
+	mov es,ax	
+	;Navigate to snake_body to initialize snake
+	mov si,2	
 	mov cx,4
 
 	
 	clearScreen
-	;设置地图上下边界
+	;Set map
 	call setRowBackground 
-	;设置地图左右边界
 	call setColBackground 
 	
-	
+	;Set score board
 	call showScore
-	
+	;Init snake body in map
 	call initSnake
-	
+	;Generate food
 	call generateFood
-	;mov ax,snake_body_length
-	;call outputOct body_length,382
+	;Show speed board
 	call showSpeed
 game1:		
+		;If gameover then game over
 		cmp gameover,1
 		je	endgame
+		;Auto move snake if not input
         call moveSnake
-        
+        ;Delay input
 		call delayInput
+		;Update score
 		call showScore
-		;call showSpeed
+		;If integral % 5 = 0, then accelerate
 		cmp integral,5
 		je accelerate
 
@@ -110,53 +128,31 @@ accelerate:
 		call showSpeed
         jmp game1
 endgame:	
-	clearScreen	
-	call showScore	
+	clearScreen		
+	call gameOverP
 	mov ah,4ch
 	int 21h
 main endp
-showScore proc near
-	 pushR
-	 mov dh,07h
-	 mov cx,7
-	 ;mov si,125	;(80*0+52)*2+1
-	 mov si,3521	;22*80*2+1
-setColorForScore:
-	 mov es:[si],dh
-	 add si,2
-	 loop setColorForScore
-setScoreFont:
-	 mov byte ptr es:[3522],'s'
-	 mov byte ptr es:[3524],'c'
-	 mov byte ptr es:[3526],'o'
-	 mov byte ptr es:[3528],'r'
-	 mov byte ptr es:[3530],'e'
-	 mov byte ptr es:[3532],':'
-setScore: 
-	 mov ax,score
-	 push di
-	 mov di,3536
-	 call outputDec
-	 pop di
-	 popR
-	 ret 
-showScore endp
+
 initSnake proc near
 	 pushR
+	 ;Init snake direction to right
 	 mov byte ptr ds:[0],right
+	 ;Init snake initial position
 	 mov ax,0808H
+	 ;Nevigate to snake_body
 	 mov di,2
 init:
+	;Init for pack of snake body's position in the map
 	 mov ds:[di],ax
 	 add di,2
 	 inc al
 	 loop init		 
 	 mov di,2
 initBody:
-	;四段身子
 	 
 printSnake:
-	 
+	 ;Print the snake body by the position in snake_body
 	 mov ax,ds:[di]
 	 mov dl,' '
 	 mov dh,white
@@ -192,32 +188,41 @@ printSnake:
 	 call print
 	 inc di
 	 inc di
+	 ;Snake_head store the EA of next snake_head
 	 mov snake_head,di
-	;四段身子初始化结束
+	
 	 popR
 	 ret
 initSnake endp
 
 getInput proc near
+	;Proc for get keyboard input to change the direction
 	pushR
+	;Check out the buffer
 	mov al,0
 	mov ah,1
 	int 16h
 	
 	cmp ah,1
 	je endGetInput
-	
+	;Wait for the keyboard input
 	mov al,0
 	mov ah,0
 	int 16h
 	
+	;Judge the for direction's scan code
+	;And change the snake direction if ok
 left_key:
 	cmp ah,left
+	;If current direction isnt right
+	;Then change the snake_direction to input direction
+	;The following is the same
 	jne right_key
 	mov bh,ds:[0]
 	cmp bh,right
 	je	endGetInput
 	mov byte ptr ds:[0],left
+	
 	
 right_key:
 	cmp ah,right
@@ -227,6 +232,7 @@ right_key:
 	je endGetInput
 	mov byte ptr ds:[0],right
 	
+	
 up_key:
 	cmp ah,up
 	jne down_key
@@ -234,6 +240,7 @@ up_key:
 	cmp bh,down
 	je endGetInput
 	mov byte ptr ds:[0],up
+	
 down_key:
 	cmp ah,down
 	jne endGetInput
@@ -241,55 +248,54 @@ down_key:
 	cmp bh,up
 	je endGetInput
 	mov byte ptr ds:[0],down
-	
+
 endGetInput:
 	popR
 	ret
 getInput endp
 
 moveSnake proc near
+	;Proc for moving the snake by snake_direction
 	pushR
-	
-	
+	;Check the snake_direction, and move the snake
 	mov di,snake_head
 	sub di,2
 	cmp byte ptr ds:[0],up
 	je move_up
 	
-	;mov ax,snake_direction
+	;Mov ax,snake_direction
     cmp byte ptr ds:[0], down
     je move_down
 
-    ;mov ax,snake_direction
+    ;Mov ax,snake_direction
     cmp byte ptr ds:[0], left
     je move_left
 
-    ;mov ax,snake_direction
+    ;Mov ax,snake_direction
     cmp byte ptr ds:[0], right
     je move_right
     
  	move_up:
         mov ax, ds:[di]
         sub ax,0100h
-        jmp checkout
+        jmp checking
 
     move_down:
         mov ax, ds:[di]
         add ax,0100h
-        jmp checkout
+        jmp checking
     move_left:
         mov ax, ds:[di]
         sub ax,0001h
-        jmp checkout
+        jmp checking
 
     move_right:
         mov ax, ds:[di]
         add ax,0001h
-        ;mov ds:[di], ax
-        jmp checkout	
+        jmp checking	
         
-checkout: 
-
+checking: 
+	;Check if the snake hit the border
 	cmp ah, 0
     je setGameover
     cmp ah, 21
@@ -299,6 +305,7 @@ checkout:
     cmp al, 39
     je setGameover
     
+    ;Check if the snake bite itself
     mov cx, snake_head
     sub cx, 4
     mov di, 2
@@ -313,33 +320,34 @@ checkout:
 
         loop s0
 
-
+	;To get the food position in the map
+	;But i set it transparent in order to beautify the ui
 	mov bx,food_position
-	
-	
 	push ax
 	push bx
 	xor bx,bx 
 	mov bx,food_position
 	xor ax,ax
 	mov al,bh
-	mov di,500
-	call outputDec
+	mov di,3640
+	call outputDecTransparent
 	 
 	xor ax,ax
 	mov al,bl
-	mov di,506
-	call outputDec
+	mov di,3646
+	call outputDecTransparent
 	pop bx
 	pop ax
 	
+	;If the head of snake has the same location to the food position
+	;Then snake get the food, we should enlarge it
 	cmp ax,bx	
 		
 	je getFood
-	
-	;jmp backWardBody
-	
+
 backWardBody:
+	;Update the snake body position
+	;By backward the packs of snake
 	mov cx,snake_head
 	
 	sub cx,4
@@ -347,6 +355,7 @@ backWardBody:
 	
 	shr cx,1
 	push ax
+	;Set the backward one black
 	mov dl,' '
 	mov dh,black
 	mov bx,ds:[di]
@@ -358,9 +367,28 @@ s5:
         add di, 2
 
         loop s5
+	;Other one has the normal color
+	;When color % 5 = 0, the snake is white
+	;When color % 5 = 1, the snake is blue
+	;When color % 5 = 2, the snake is greenplus
+	;When color % 5 = 3, the snake is pink
+	;When color % 5 = 4, the snake is zeroing the color
+	cmp color,0
+	je	white_color
+	cmp color,1
+	je	blue_color
+	cmp color,2
+	je	greenplus_color
+	cmp color,3
+	je  pink_color
+	cmp color,4
+	je	zeroing_color
 
-    mov dl, ' ';字符
-    mov dh, white;颜色
+zeroing_color:
+	mov color,0
+white_color:	
+    mov dl, ' '
+    mov dh, white
     mov bx, ds:[di]	
 	call print
 	
@@ -370,11 +398,59 @@ s5:
 	mov dh,red
 	mov bx,ds:[di]
 	call print
+	mov current_color,white
+	jmp endMove
+blue_color:	
+    mov dl, ' '
+    mov dh, blue
+    mov bx, ds:[di]	
+	call print
+	
+	pop ax
+	mov ds:[di],ax
+	mov dl,' '
+	mov dh,red
+	mov bx,ds:[di]
+	call print
+	mov current_color,blue
+	jmp endMove
+greenplus_color:	
+    mov dl, ' '
+    mov dh, greenplus
+    mov bx, ds:[di]	
+	call print
+	
+	pop ax
+	mov ds:[di],ax
+	mov dl,' '
+	mov dh,red
+	mov bx,ds:[di]
+	call print
+	mov current_color,greenplus
 	jmp endMove
 
-getFood:
+pink_color:	
+    mov dl, ' '
+    mov dh, pink
+    mov bx, ds:[di]	
+	call print
+	
+	pop ax
+	mov ds:[di],ax
 	mov dl,' '
-	mov dh,white
+	mov dh,red
+	mov bx,ds:[di]
+	call print
+	;mov color,0
+	mov current_color,pink
+
+	jmp endMove	
+getFood:
+	;If get the food, set the current position of snake head
+	;To the food position
+	;Set color to select the snake's color
+	mov dl,' '
+	mov dh,current_color
 	mov di,snake_head
 	sub di,2
 	mov bx,ds:[di]
@@ -388,14 +464,19 @@ getFood:
 	mov dh,red
 	mov bx,ds:[di]
 	call print
-	
+	;Update the snake_head (pointer of next head)
 	add di,2
 	mov snake_head,di
+	;Add your score
 	add score,10
+	;Inc color
+	inc color
+	;Add the integral
 	inc integral
 	cmp integral,5
 	ja	zeroing
 	jmp continue
+	;If the integral > 5, then zeroing it
 zeroing:
 	mov integral,0
 continue:
@@ -413,9 +494,12 @@ moveSnake endp
 
 
 generateFood proc near
+	;The proc for generate the food
+	;Include the position and print the food in the map
 	pushR
 setFoodPosition:
 	
+	;Check if the food position coincident with snake
 	call getRandPosition
 	mov cx,snake_head
 	
@@ -426,12 +510,14 @@ setFoodPosition:
 
 	scan:
 		mov ax,ds:[di]
+		;If coincident, then restart the segment
 		cmp ax,food_position
 		jz setFoodPosition
 		inc di
 		inc di
 	loop scan
 	
+	;Print the food in the map
 	mov ax,food_position
 
 	mov bl,byte ptr food_position
@@ -448,7 +534,11 @@ generateFood endp
 
 
 print proc near
+	;Proc for print the snake && food in the map
 	pushR
+	;The position formula is
+	;(bh*80+bl)*2
+	;Cause i replac a grid with a WORD
 	mov al,80
 	mul bh
 	xor bh,bh
@@ -458,6 +548,7 @@ print proc near
 	push si
 	mov si,ax
 	shl si,1
+	;Actually there has two blocks
 	mov es:[si],dl
 	mov es:[si+1],dh
 	mov es:[si+2],dl
@@ -468,6 +559,11 @@ print proc near
 print endp
 
 setRowBackground proc 
+	;The proc for set the row of background
+	;The length of the line is 21
+	;The length of the column is 39
+	;Loop to draw the background symmetrically
+	;The setColBackground's algorithm is the same
 	pushR
 	mov dl,' '
 	mov dh,greenplus
@@ -490,6 +586,7 @@ drawRow:
 	ret
 setRowBackground endp
 setColBackground proc near
+	;The proc for set the col of background
 	pushR
 	mov dl,' ' 
 	mov dh,greenplus
@@ -513,7 +610,10 @@ drawCol:
 setColBackground endp
 
 delayInput proc near
+	;The proc for delay input
+	;And control the snake moving speed
 	pushR
+	
 	mov cx,speed
 	input:
 		call getInput
@@ -523,16 +623,22 @@ delayInput proc near
 delayInput endp
 
 getRandPosition proc near
-pushR
+	;The proc for getting the food position
+	;randomly
+	pushR
 getRow:
-
-	mov ah,0
-	int 1ah
-	mov ax,dx
-	and ah,3
-	mov dl,19
-	div dl
-	;ah存余数
+	;Get a random number through port 43h
+	;Get the required coordinates based on the boundary
+	mov ax,0
+	out 43h,al
+	in al,40h
+	in al,40h
+	in al,40h
+	
+	mov bl,18
+	
+	div bl
+	;ah store the remainder
     
     cmp ah,1
     jb getRow
@@ -541,13 +647,15 @@ getRow:
     mov byte ptr food_position+1,ah
 getCol:	
 
-	mov ah,0
-	int 1ah
-	mov ax,dx
-	and ah,3
-	mov dl,38
-	div dl
-	;ah存余数
+	mov ax,0
+	out 43h,al
+	in al,40h
+	in al,40h
+	in al,40h
+	
+	mov bl,37
+	
+	div bl
 	
 	cmp ah,1
 	jb getCol
@@ -560,8 +668,10 @@ popR
 getRandPosition endp
 
 outputDec proc near
+	;The proc for print the decimal in the screen
+	;Use in speed board && score board
 	 pushR
-	 ;di作为输出的参数
+	 ;di as the param
 	 xor cx,cx
 l1:
 	 xor dx,dx
@@ -574,49 +684,130 @@ l1:
 l2:
 	 pop dx
 	 add dl,30h
-	 ;mov si,382
-	 mov dh,00000111b
 	 
+	 mov dh,00000111b	 
 	 mov es:[di],dl
-	 mov es:[di+1],dh
-	 
+	 mov es:[di+1],dh	 
 	 add di,2 
 	 loop l2
 	 popR
 	 ret
 outputDec endp
 
-showSpeed proc near
-	pushR
-	mov si,3681	;23*80*2+1
-setSpeedFont:
-	 mov byte ptr es:[3682],'s'
-	 mov byte ptr es:[3683],07h
-	 mov byte ptr es:[3684],'p'
-	 mov byte ptr es:[3685],07h
-	 mov byte ptr es:[3686],'e'
-	 mov byte ptr es:[3687],07h
-	 mov byte ptr es:[3688],'e'
-	 mov byte ptr es:[3689],07h
-	 mov byte ptr es:[3690],'d'
-	 mov byte ptr es:[3691],07h
-	 mov byte ptr es:[3692],':'
-	 mov byte ptr es:[3693],07h
-setSpeed: 
-	 mov ax,speed_level
-	 push di
-	 mov di,3696
+outputDecTransparent proc near
+	 pushR
+	 ;di as the param
+	 ;Output decimal data transparently
+	 xor cx,cx
+l1:
+	 xor dx,dx
+	 mov si,10
+	 div si
+	 push dx
+	 inc cx
+	 cmp ax,0
+	 jne l1
+l2:
+	 pop dx
+	 add dl,30h
+	 mov dh,0	 
+	 mov es:[di],dl
+	 mov es:[di+1],dh	 
+	 add di,2 
+	 loop l2
+	 popR
+	 ret
+outputDecTransparent endp
+
+showScore proc near
+	 ;The proc for showing the socre board
+	 pushR
+	 ;Set the score board's location
+	 mov si,3520	;(22*80+0)*2
+	 mov cx,nstring0
+	 mov di,0
+setText:
+	;show "Your score is:"
+	 mov al,string0[di]
+	 mov byte ptr es:[si],al
+	 mov byte ptr es:[si+1],07h
+	 add si,2
+	 inc di
+	 loop setText
+setScore:
+	;Set the current score in the screen
+	 mov di,si
+	 add di,4
+	 mov ax,score
 	 call outputDec
-	 pop di
+	 popR
+	 ret
+showScore endp
+
+showSpeed proc near
+	;The proc for showing the speed board
+	pushR
+	;Set the speed board's location
+	mov si,3680	;23*80*2
+	mov cx,nstring2
+	mov di,0
+setText:
+	;Print "Current speed is"
+	mov al,string2[di]
+	mov byte ptr es:[si],al
+	mov byte ptr es:[si+1],07h
+	add si,2
+	inc di
+	loop setText
+setSpeed: 
+	;Print the current speed
+	 mov di,si
+	 add di,4
+	 mov ax,speed_level
+	 call outputDec
 	 popR
 	 ret 
 	popR
 	ret
 showSpeed endp
 
-
-
-
+gameOverP proc near
+	;The proc for showing the game over screen
+	pushR
+	;Set position
+	mov si,1330	;(8*80+25)*2
+	mov cx,nszgameover
+	mov di,0
+setText:
+	;Print "game over!"
+	mov al,szgameover[di]
+	mov byte ptr es:[si],al
+	mov byte ptr es:[si+1],07h
+	add si,2
+	inc di
+	loop setText
+	mov si,1650	;(10*80+25)*2
+	mov cx,nstring1
+	mov di,0
+setString:
+	;Print "You have got point:"
+	mov al,string1[di]
+	mov byte ptr es:[si],al
+	mov byte ptr es:[si+1],07h
+	add si,2
+	inc di
+	loop setString
+setScore:
+	;Print the current score
+	mov di,si
+	add di,4
+	mov ax,score
+	call outputDec
+	popR
+	ret
+gameOverP endp
 code ends
 end start
+
+
 
