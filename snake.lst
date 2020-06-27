@@ -1,102 +1,54 @@
-Microsoft (R) Macro Assembler Version 6.11		    06/24/20 22:55:13
+Microsoft (R) Macro Assembler Version 6.11		    06/27/20 11:40:35
 tempfile.asm						     Page 1 - 1
 
 
 				clearScreen macro
-					;25*80分辨率
+					;25*80 resolution
 					mov ah,00h
 					mov al,03h
 					int 10h
 					endm
-				print macro p1,p2
-					mov al,80
-					mul bh
-					xor bh,bh
-					shl bl,1
-					add ax,bx
-					
+
+				pushR macro
+					;Macro of push all R into stack
+					push ax
+					push bx
+					push cx
+					push dx
 					push si
-					mov si,ax
-					shl si,1
-					mov es:[si],p1
-					mov es:[si+1],p2
-					mov es:[si+2],p1
-					mov es:[si+3],p2
-					pop si
+					push di
 					endm
 
-				printone macro p1,p2
-					mov al,80
-					mul bh
-					xor bh,bh
-					shl bl,1
-					add ax,bx
-					
-					push si
-					mov si,ax
-					shl si,1
-					mov es:[si],p1
-					mov es:[si+1],p2
-					mov es:[si+2],p1
-					mov es:[si+3],p2
+				popR macro
+					;Macro of pop all R from stack
+					pop di
 					pop si
-					endm
-				printBody macro p1,color
-					 mov ax,ds:[p1]
-					 mov dl,' '
-					 mov dh,color
-					 mov bl,al
-					 mov bh,ah
-					 print dl,dh
-					endm
-				setRowBackground macro p1,p2,p3,p4,p5,p6
-					mov dl,p1
-					mov dh,p2
-					mov bl,p3
-					mov bh,p4
-					mov cx,p5
-				drawRow:
-					push cx
-					push bx
-					print dl,dh
-					pop bx
-					push bx
-					add bh,p6
-					print dl,dh
-					pop bx
-					inc bl
+					pop dx
 					pop cx
-					loop drawRow
-					endm
-				setColBackground macro p1,p2,p3,p4,p5,p6
-					mov dl,p1
-					mov dh,p2
-					mov bl,p3
-					mov bh,p4
-					mov cx,p5
-				drawCol:
-					push cx
-					push bx
-					print dl,dh
 					pop bx
-					push bx
-					add bl,p6
-					print dl,dh
-					pop bx
-					inc bh
-					pop cx
-					loop drawCol
+					pop ax
 					endm
+
+
+ 0000				stack segment
+ 0000  0050 [			dw	80 dup (0)
+        0000
+       ]
+ 00A0				top label word
+
+ 00A0				stack ends
+
+ 0000				data segment
+					;Set data structure
 					
-				.model small
- 0000				.data
- 0000 4D00				snake_direction dw 4d00h
+ 0000 4D 00				snake_direction db 4dh,00h
  0002  0190 [				snake_body dw 400 dup(0)
         0000
        ]
  0322 0000				food_position dw 0
- 0324 0004				snake_length dw 4
- 0326 0000				score dw 0
+ 0324 0003				snake_body_length dw 3
+ 0326 0008				snake_head	dw 8
+ 0328 0000				score dw 0
  = 0077					white equ 01110111b
  = 0055					pink equ 01010101b
  = 0044					red	equ 01000100b
@@ -105,378 +57,958 @@ tempfile.asm						     Page 1 - 1
  = 0011					blue equ 00010001b
  = 0000					black equ 00000000b
  = 0033					greenplus equ 00110011b
- = 4800					up	equ	4800h
- = 5000					down equ 5000h
- = 4B00					left equ 4b00h
- = 4D00					right equ 4d00h
- = 0019					nscore equ 25
- = 001A					score_position equ 26
- 0328 0001				jblink dw 1
- 032A 0000				gameover dw 0
- 0000				.code
+ 032A 00				current_color db 0
+ = 0048					up	equ	48h
+ = 0050					down equ 50h
+ = 004B					left equ 4bh
+ = 004D					right equ 4dh
+ 032B 0001				jblink dw 1
+ 032D 0000				gameover dw 0
+ 032F 4ABC				speed dw 04abch
+ 0331 0000				food_get dw 0
+ 0333 0000				acceleration dw 0
+ 0335 0000				speed_level dw 0
+ 0337 0000				integral dw 0
+ 0339 0000				color dw 0
+ 033B 0000				chgdirection dw 0
+ 033D 59 6F 75 72 20 73			string0 db 'Your score is:'
+       63 6F 72 65 20 69
+       73 3A
+ 034B = 000E				nstring0 equ $-string0
+ 034B 47 61 6D 65 20 4F			szgameover db 'Game Over!'
+       76 65 72 21
+ 0355 = 000A				nszgameover equ $-szgameover
+ 0355 59 6F 75 20 68 61			string1 db 'You have got point :'
+       76 65 20 67 6F 74
+       20 70 6F 69 6E 74
+       20 3A
+ 0369 = 0014				nstring1 equ $-string1
+ 0369 43 75 72 72 65 6E			string2 db 'Current speed is:'
+       74 20 73 70 65 65
+       64 20 69 73 3A
+ 037A = 0011				nstring2 equ $-string2
+					
+ 037A				data ends
+ 0000				code segment
+				assume ds:data,cs:code,ss:stack
  0000				start:
  0000				main proc far
- 0000  B8 B800				mov ax,0b800h
- 0003  8E C0				mov es,ax	;直接写屏
-					
- 0005  BE 0002				mov si,2	;定位到body 初始化蛇
- 0008  B9 0004				mov cx,4
+
+ 0000				init:
+					;Init
+ 0000  B8 ---- R			mov ax,data
+ 0003  8E D8				mov ds,ax
+ 0005  B8 ---- R			mov ax,stack
+ 0008  8E D0				mov ss,ax
+ 000A  8D 26 00A0 R			lea sp,top
+					;Write the screen directly
+ 000E  B8 B800				mov ax,0b800h
+ 0011  8E C0				mov es,ax	
+					;Navigate to snake_body to initialize snake
+ 0013  BE 0002				mov si,2	
+ 0016  B9 0004				mov cx,4
 
 					
 					clearScreen
- 000B  B4 00		     1		mov ah,00h
- 000D  B0 03		     1		mov al,03h
- 000F  CD 10		     1		int 10h
-					;设置地图上下边界
-					setRowBackground ' ',white,0,0,30,20
- 0011  B2 20		     1		mov dl,' '
- 0013  B6 77		     1		mov dh,white
- 0015  B3 00		     1		mov bl,0
- 0017  B7 00		     1		mov bh,0
- 0019  B9 001E		     1		mov cx,30
- 001C			     1	drawRow:
- 001C  51		     1		push cx
- 001D  53		     1		push bx
- 001E  B0 50		     2		mov al,80
- 0020  F6 E7		     2		mul bh
- 0022  32 FF		     2		xor bh,bh
- 0024  D0 E3		     2		shl bl,1
- 0026  03 C3		     2		add ax,bx
- 0028  56		     2		push si
- 0029  8B F0		     2		mov si,ax
- 002B  D1 E6		     2		shl si,1
- 002D  26: 88 14	     2		mov es:[si],dl
- 0030  26: 88 74 01	     2		mov es:[si+1],dh
- 0034  26: 88 54 02	     2		mov es:[si+2],dl
- 0038  26: 88 74 03	     2		mov es:[si+3],dh
- 003C  5E		     2		pop si
- 003D  5B		     1		pop bx
- 003E  53		     1		push bx
- 003F  80 C7 14		     1		add bh,20
- 0042  B0 50		     2		mov al,80
- 0044  F6 E7		     2		mul bh
- 0046  32 FF		     2		xor bh,bh
- 0048  D0 E3		     2		shl bl,1
- 004A  03 C3		     2		add ax,bx
- 004C  56		     2		push si
- 004D  8B F0		     2		mov si,ax
- 004F  D1 E6		     2		shl si,1
- 0051  26: 88 14	     2		mov es:[si],dl
- 0054  26: 88 74 01	     2		mov es:[si+1],dh
- 0058  26: 88 54 02	     2		mov es:[si+2],dl
- 005C  26: 88 74 03	     2		mov es:[si+3],dh
- 0060  5E		     2		pop si
- 0061  5B		     1		pop bx
- 0062  FE C3		     1		inc bl
- 0064  59		     1		pop cx
- 0065  E2 B5		     1		loop drawRow
-					;设置地图左右边界
-					setColBackground ' ',white,0,0,21,30
- 0067  B2 20		     1		mov dl,' '
- 0069  B6 77		     1		mov dh,white
- 006B  B3 00		     1		mov bl,0
- 006D  B7 00		     1		mov bh,0
- 006F  B9 0015		     1		mov cx,21
- 0072			     1	drawCol:
- 0072  51		     1		push cx
- 0073  53		     1		push bx
- 0074  B0 50		     2		mov al,80
- 0076  F6 E7		     2		mul bh
- 0078  32 FF		     2		xor bh,bh
- 007A  D0 E3		     2		shl bl,1
- 007C  03 C3		     2		add ax,bx
- 007E  56		     2		push si
- 007F  8B F0		     2		mov si,ax
- 0081  D1 E6		     2		shl si,1
- 0083  26: 88 14	     2		mov es:[si],dl
- 0086  26: 88 74 01	     2		mov es:[si+1],dh
- 008A  26: 88 54 02	     2		mov es:[si+2],dl
- 008E  26: 88 74 03	     2		mov es:[si+3],dh
- 0092  5E		     2		pop si
- 0093  5B		     1		pop bx
- 0094  53		     1		push bx
- 0095  80 C3 1E		     1		add bl,30
- 0098  B0 50		     2		mov al,80
- 009A  F6 E7		     2		mul bh
- 009C  32 FF		     2		xor bh,bh
- 009E  D0 E3		     2		shl bl,1
- 00A0  03 C3		     2		add ax,bx
- 00A2  56		     2		push si
- 00A3  8B F0		     2		mov si,ax
- 00A5  D1 E6		     2		shl si,1
- 00A7  26: 88 14	     2		mov es:[si],dl
- 00AA  26: 88 74 01	     2		mov es:[si+1],dh
- 00AE  26: 88 54 02	     2		mov es:[si+2],dl
- 00B2  26: 88 74 03	     2		mov es:[si+3],dh
- 00B6  5E		     2		pop si
- 00B7  5B		     1		pop bx
- 00B8  FE C7		     1		inc bh
- 00BA  59		     1		pop cx
- 00BB  E2 B5		     1		loop drawCol
+ 0019  B4 00		     1		mov ah,00h
+ 001B  B0 03		     1		mov al,03h
+ 001D  CD 10		     1		int 10h
+					;Set map
+ 001F  E8 0336				call setRowBackground 
+ 0022  E8 035E				call setColBackground 
 					
-					
- 00BD  E8 0011				call showScore
- 00C0  E8 019D				call delay	
- 00C3  E8 0069				call initSnake
- 00C6  B9 0005				mov cx,5
- 00C9				l0:
- 00C9  E8 00AF				call moveSnake
- 00CC  E8 0191				call delay
- 00CF  E2 F8				loop l0
- 00D1				main endp
- 00D1				showScore proc near
- 00D1  50				 push ax
- 00D2  53				 push bx
- 00D3  51				 push cx
- 00D4  52				 push dx
- 00D5  56				 push si
- 00D6  57				 push di
- 00D7  B6 07				 mov dh,07h
- 00D9  B9 0007				 mov cx,7
- 00DC  BE 007D				 mov si,125	;(80*0+52)*2+1
- 00DF				setColorForScore:
- 00DF  26: 88 34			 mov es:[si],dh
- 00E2  83 C6 02				 add si,2
- 00E5  E2 F8				 loop setColorForScore
- 00E7				setScoreFont:
- 00E7  26: C6 06 007E 73		 mov byte ptr es:[126],'s'
- 00ED  26: C6 06 0080 63		 mov byte ptr es:[128],'c'
- 00F3  26: C6 06 0082 6F		 mov byte ptr es:[130],'o'
- 00F9  26: C6 06 0084 72		 mov byte ptr es:[132],'r'
- 00FF  26: C6 06 0086 65		 mov byte ptr es:[134],'e'
- 0105  26: C6 06 0088 3A		 mov byte ptr es:[136],':'
- 010B				setScore: 
- 010B  A1 0326 R			 mov ax,score
- 010E  33 C9				 xor cx,cx
- 0110  B9 0005				 mov cx,5
- 0113  BE 0094				 mov si,148
- 0116  BF 000A				 mov di,10
- 0119					 lset:
- 0119  33 D2				 	xor dx,dx
- 011B  F7 F7				 	div di
- 011D  80 C2 30				 	add dl,30h
- 0120  26: 88 14			 	mov byte ptr es:[si],dl
- 0123  83 EE 02				 	sub si,2
- 0126  E2 F1				 	loop lset
- 0128  5F				 pop di
- 0129  5E				 pop si
- 012A  5A				 pop dx
- 012B  59				 pop cx
- 012C  5B				 pop bx
- 012D  58				 pop ax
- 012E  C3				 ret 
- 012F				showScore endp
- 012F				initSnake proc near
- 012F  50				 push ax
- 0130  53				 push bx
- 0131  51				 push cx
- 0132  52				 push dx
- 0133  56				 push si
- 0134  57				 push di
- 0135  B8 0E0C				 mov ax,0E0cH
- 0138				init:
- 0138  89 05				 mov ds:[di],ax
- 013A  83 C7 02				 add di,2
- 013D  FE C0				 inc al
- 013F  E2 F7				 loop init		 
- 0141  BF 0002				 mov di,2
- 0144				initBody:
-					;四段身子
- 0144  B9 0004				 mov cx,4
- 0147				printSnake:
+					;Set score board
+ 0025  E8 0441				call showScore
+					;Init snake body in map
+ 0028  E8 0041				call initSnake
+					;Generate food
+ 002B  E8 02C4				call generateFood
+					;Show speed board
+ 002E  E8 046B				call showSpeed
+ 0031				game1:		
+						;If gameover then game over
+ 0031  83 3E 032D R 01				cmp gameover,1
+ 0036  74 27					je	endgame
+						;Auto move snake if not input
+ 0038  E8 00FF			        call moveSnake
+				        ;Delay input
+ 003B  E8 0370					call delayInput
+						;Update score
+ 003E  E8 0428					call showScore
+						;If integral % 5 = 0, then accelerate
+ 0041  83 3E 0337 R 05				cmp integral,5
+ 0046  74 02					je accelerate
+
+ 0048  75 E7					jne game1
+ 004A				accelerate:
+ 004A  81 2E 032F R 0100			sub speed,100h	
+ 0050  FF 06 0335 R				inc speed_level
+ 0054  C7 06 0337 R 0000			mov integral,0
+ 005A  E8 043F					call showSpeed
+ 005D  EB D2			        jmp game1
+ 005F				endgame:	
+					clearScreen		
+ 005F  B4 00		     1		mov ah,00h
+ 0061  B0 03		     1		mov al,03h
+ 0063  CD 10		     1		int 10h
+ 0065  E8 046E				call gameOverP
+ 0068  B4 4C				mov ah,4ch
+ 006A  CD 21				int 21h
+ 006C				main endp
+
+ 006C				initSnake proc near
+					 pushR
+ 006C  50		     1		push ax
+ 006D  53		     1		push bx
+ 006E  51		     1		push cx
+ 006F  52		     1		push dx
+ 0070  56		     1		push si
+ 0071  57		     1		push di
+					 ;Init snake direction to right
+ 0072  C6 06 0000 4D			 mov byte ptr ds:[0],right
+					 ;Init snake initial position
+ 0077  B8 0808				 mov ax,0808H
+					 ;Nevigate to snake_body
+ 007A  BF 0002				 mov di,2
+ 007D				init:
+					;Init for pack of snake body's position in the map
+ 007D  89 05				 mov ds:[di],ax
+ 007F  83 C7 02				 add di,2
+ 0082  FE C0				 inc al
+ 0084  E2 F7				 loop init		 
+ 0086  BF 0002				 mov di,2
+ 0089				initBody:
 					 
- 0147  8B 05				 mov ax,ds:[di]
- 0149  B2 07				 mov dl,07h
- 014B  B6 33				 mov dh,greenplus
- 014D  8A D8				 mov bl,al
- 014F  8A FC				 mov bh,ah
-					 printone dl,dh
- 0151  B0 50		     1		mov al,80
- 0153  F6 E7		     1		mul bh
- 0155  32 FF		     1		xor bh,bh
- 0157  D0 E3		     1		shl bl,1
- 0159  03 C3		     1		add ax,bx
- 015B  56		     1		push si
- 015C  8B F0		     1		mov si,ax
- 015E  D1 E6		     1		shl si,1
- 0160  26: 88 14	     1		mov es:[si],dl
- 0163  26: 88 74 01	     1		mov es:[si+1],dh
- 0167  26: 88 54 02	     1		mov es:[si+2],dl
- 016B  26: 88 74 03	     1		mov es:[si+3],dh
- 016F  5E		     1		pop si
- 0170  47				 inc di
- 0171  47				 inc di
- 0172  E2 D3				 loop printSnake
-					;四段身子初始化结束
- 0174  5F				 pop di
- 0175  5E				 pop si
- 0176  5A				 pop dx
- 0177  59				 pop cx
- 0178  5B				 pop bx
- 0179  58				 pop ax
- 017A  C3				 ret
- 017B				initSnake endp
-
- 017B				movesnake proc near
- 017B  50				push ax
- 017C  53				push bx
- 017D  51				push cx
- 017E  52				push dx
- 017F  56				push si
- 0180  57				push di
-
- 0181  A1 0000 R			mov ax,snake_direction
-
- 0184  8B 3E 0324 R			mov di,snake_length
- 0188  83 EF 02				sub di,2
-					
- 018B  3D 4D00				cmp ax,right
- 018E  74 00				je move_r
- 0190				move_r:
- 0190  8B 05				mov ax,ds:[di]
- 0192  04 01				add al,1
- 0194  EB 00				jmp judgePlug
-					
- 0196				judgePlug:
- 0196  50				push ax
- 0197  80 FC 00				cmp ah,0
- 019A  75 03 E9 00BA			je gameend
- 019F  80 FC 15				cmp ah,21
- 01A2  75 03 E9 00B2			je gameend
- 01A7  3C 00				cmp al,0
- 01A9  75 03 E9 00AB			je gameend
- 01AE  3C 1E				cmp al,30
- 01B0  75 03 E9 00A4			je gameend
-					
- 01B5  8B 0E 0324 R			mov cx,snake_length
- 01B9  83 E9 06				sub cx,6
- 01BC  BF 0002				mov di,2
- 01BF  D1 E9				shr cx,1
-					
- 01C1				s0:
- 01C1  8B 1D				mov bx,ds:[di]
- 01C3  3B D8				cmp bx,ax
- 01C5  75 03 E9 008F			je gameend
-					
- 01CA  83 C7 02				add di,2
- 01CD  E2 F2				loop s0
-					
- 01CF  58				pop ax
- 01D0				update:
- 01D0  8B 0E 0324 R			mov cx,snake_length
- 01D4  83 E9 06				sub cx,6
- 01D7  BF 0002				mov di,2
- 01DA  D1 E9				shr cx,1
- 01DC  50				push ax
-					
- 01DD  B2 20				mov dl,' '
- 01DF  B6 00				mov dh,black
- 01E1  8B 1D				mov bx,ds:[di]
-					print dl,dh
- 01E3  B0 50		     1		mov al,80
- 01E5  F6 E7		     1		mul bh
- 01E7  32 FF		     1		xor bh,bh
- 01E9  D0 E3		     1		shl bl,1
- 01EB  03 C3		     1		add ax,bx
- 01ED  56		     1		push si
- 01EE  8B F0		     1		mov si,ax
- 01F0  D1 E6		     1		shl si,1
- 01F2  26: 88 14	     1		mov es:[si],dl
- 01F5  26: 88 74 01	     1		mov es:[si+1],dh
- 01F9  26: 88 54 02	     1		mov es:[si+2],dl
- 01FD  26: 88 74 03	     1		mov es:[si+3],dh
- 0201  5E		     1		pop si
-					
- 0202				s5:
- 0202  8B 55 02				mov dx,ds:[di+2]
- 0205  89 15				mov ds:[di],dx
- 0207  83 C7 02				add di,2
- 020A  E2 F6				loop s5
-					
- 020C  B2 20				mov dl,' '
- 020E  B6 71				mov dh,71h
- 0210  8B 1D				mov bx,ds:[di]
-					print dl,dh
- 0212  B0 50		     1		mov al,80
- 0214  F6 E7		     1		mul bh
- 0216  32 FF		     1		xor bh,bh
- 0218  D0 E3		     1		shl bl,1
- 021A  03 C3		     1		add ax,bx
- 021C  56		     1		push si
- 021D  8B F0		     1		mov si,ax
- 021F  D1 E6		     1		shl si,1
- 0221  26: 88 14	     1		mov es:[si],dl
- 0224  26: 88 74 01	     1		mov es:[si+1],dh
- 0228  26: 88 54 02	     1		mov es:[si+2],dl
- 022C  26: 88 74 03	     1		mov es:[si+3],dh
- 0230  5E		     1		pop si
-					
- 0231  58				pop ax
- 0232  89 05				mov ds:[di],ax
- 0234  B2 20				mov dl,' '
- 0236  B6 44				mov dh,44h
- 0238  8B 1D				mov bx,ds:[di]
-					print dl,dh
- 023A  B0 50		     1		mov al,80
- 023C  F6 E7		     1		mul bh
- 023E  32 FF		     1		xor bh,bh
- 0240  D0 E3		     1		shl bl,1
- 0242  03 C3		     1		add ax,bx
- 0244  56		     1		push si
- 0245  8B F0		     1		mov si,ax
- 0247  D1 E6		     1		shl si,1
- 0249  26: 88 14	     1		mov es:[si],dl
- 024C  26: 88 74 01	     1		mov es:[si+1],dh
- 0250  26: 88 54 02	     1		mov es:[si+2],dl
- 0254  26: 88 74 03	     1		mov es:[si+3],dh
- 0258  5E		     1		pop si
-
- 0259				gameend:
- 0259  5F			 	 pop di
- 025A  5E				 pop si
- 025B  5A				 pop dx
- 025C  59				 pop cx
- 025D  5B				 pop bx
- 025E  58				 pop ax
- 025F  C3				ret
- 0260				movesnake endp
-
- 0260				delay proc near
- 0260				delayed_one_second:
- 0260  50				push ax
- 0261  1E				push ds
- 0262  56				push si
- 0263  51				push cx
+ 0089				printSnake:
+					 ;Print the snake body by the position in snake_body
+ 0089  8B 05				 mov ax,ds:[di]
+ 008B  B2 20				 mov dl,' '
+ 008D  B6 77				 mov dh,white
+ 008F  8A D8				 mov bl,al
+ 0091  8A FC				 mov bh,ah
+ 0093  E8 0296				 call print
+ 0096  47				 inc di
+ 0097  47				 inc di
 					 
- 0264  B8 0000				mov ax,0
- 0267  8E D8				mov ds,ax
- 0269  BE 046C				mov si,46ch
- 026C  AD				lodsw
-					;设置时延
- 026D  83 C0 01				add ax,1
- 0270  8B C8				mov cx,ax
- 0272					_delayed_one_second:
- 0272  BE 046C				mov si,46ch
- 0275  AD				lodsw
- 0276  3B C1				cmp ax,cx
- 0278  73 02				jnb _delayed_over
- 027A  EB F6				jmp _delayed_one_second
+ 0098  8B 05				 mov ax,ds:[di]
+ 009A  B2 20				 mov dl,' '
+ 009C  B6 77				 mov dh,white
+ 009E  8A D8				 mov bl,al
+ 00A0  8A FC				 mov bh,ah
+ 00A2  E8 0287				 call print
+ 00A5  47				 inc di
+ 00A6  47				 inc di
 					 
- 027C					_delayed_over:
- 027C  59				pop cx
- 027D  5E				pop si
- 027E  1F				pop ds
- 027F  58				pop ax
- 0280  C3				ret
- 0281				delay endp
+ 00A7  8B 05				 mov ax,ds:[di]
+ 00A9  B2 20				 mov dl,' '
+ 00AB  B6 77				 mov dh,white
+ 00AD  8A D8				 mov bl,al
+ 00AF  8A FC				 mov bh,ah
+ 00B1  E8 0278				 call print
+ 00B4  47				 inc di
+ 00B5  47				 inc di
+					 
+ 00B6  8B 05				 mov ax,ds:[di]
+ 00B8  B2 20				 mov dl,' '
+ 00BA  B6 44				 mov dh,red
+ 00BC  8A D8				 mov bl,al
+ 00BE  8A FC				 mov bh,ah
+ 00C0  E8 0269				 call print
+ 00C3  47				 inc di
+ 00C4  47				 inc di
+					 ;Snake_head store the EA of next snake_head
+ 00C5  89 3E 0326 R			 mov snake_head,di
+					
+					 popR
+ 00C9  5F		     1		pop di
+ 00CA  5E		     1		pop si
+ 00CB  5A		     1		pop dx
+ 00CC  59		     1		pop cx
+ 00CD  5B		     1		pop bx
+ 00CE  58		     1		pop ax
+ 00CF  C3				 ret
+ 00D0				initSnake endp
 
+ 00D0				getInput proc near
+					;Proc for get keyboard input to change the direction
+					pushR
+ 00D0  50		     1		push ax
+ 00D1  53		     1		push bx
+ 00D2  51		     1		push cx
+ 00D3  52		     1		push dx
+ 00D4  56		     1		push si
+ 00D5  57		     1		push di
+					;Check out the buffer
+ 00D6  B0 00				mov al,0
+ 00D8  B4 01				mov ah,1
+ 00DA  CD 16				int 16h
+					
+ 00DC  80 FC 01				cmp ah,1
+ 00DF  74 52				je endGetInput
+					;Wait for the keyboard input
+ 00E1  B0 00				mov al,0
+ 00E3  B4 00				mov ah,0
+ 00E5  CD 16				int 16h
+					
+					;Judge the for direction's scan code
+					;And change the snake direction if ok
+ 00E7				left_key:
+ 00E7  80 FC 4B				cmp ah,left
+					;If current direction isnt right
+					;Then change the snake_direction to input direction
+					;The following is the same
+ 00EA  75 0E				jne right_key
+ 00EC  8A 3E 0000			mov bh,ds:[0]
+ 00F0  80 FF 4D				cmp bh,right
+ 00F3  74 3E				je	endGetInput
+ 00F5  C6 06 0000 4B			mov byte ptr ds:[0],left
+					
+					
+ 00FA				right_key:
+ 00FA  80 FC 4D				cmp ah,right
+ 00FD  75 0E				jne up_key
+ 00FF  8A 3E 0000			mov bh,ds:[0]
+ 0103  80 FF 4B				cmp bh,left
+ 0106  74 2B				je endGetInput
+ 0108  C6 06 0000 4D			mov byte ptr ds:[0],right
+					
+					
+ 010D				up_key:
+ 010D  80 FC 48				cmp ah,up
+ 0110  75 0E				jne down_key
+ 0112  8A 3E 0000			mov bh,ds:[0]
+ 0116  80 FF 50				cmp bh,down
+ 0119  74 18				je endGetInput
+ 011B  C6 06 0000 48			mov byte ptr ds:[0],up
+					
+ 0120				down_key:
+ 0120  80 FC 50				cmp ah,down
+ 0123  75 0E				jne endGetInput
+ 0125  8A 3E 0000			mov bh,ds:[0]
+ 0129  80 FF 48				cmp bh,up
+ 012C  74 05				je endGetInput
+ 012E  C6 06 0000 50			mov byte ptr ds:[0],down
+
+ 0133				endGetInput:
+					popR
+ 0133  5F		     1		pop di
+ 0134  5E		     1		pop si
+ 0135  5A		     1		pop dx
+ 0136  59		     1		pop cx
+ 0137  5B		     1		pop bx
+ 0138  58		     1		pop ax
+ 0139  C3				ret
+ 013A				getInput endp
+
+ 013A				moveSnake proc near
+					;Proc for moving the snake by snake_direction
+					pushR
+
+ 013A  50		     1		push ax
+ 013B  53		     1		push bx
+ 013C  51		     1		push cx
+ 013D  52		     1		push dx
+ 013E  56		     1		push si
+ 013F  57		     1		push di
+					;Check the snake_direction, and move the snake
+ 0140  8B 3E 0326 R			mov di,snake_head
+ 0144  83 EF 02				sub di,2
+ 0147  80 3E 0000 48			cmp byte ptr ds:[0],up
+ 014C  74 15				je move_up
+					
+					;Mov ax,snake_direction
+ 014E  80 3E 0000 50		    cmp byte ptr ds:[0], down
+ 0153  74 15			    je move_down
+
+				    ;Mov ax,snake_direction
+ 0155  80 3E 0000 4B		    cmp byte ptr ds:[0], left
+ 015A  74 15			    je move_left
+
+				    ;Mov ax,snake_direction
+ 015C  80 3E 0000 4D		    cmp byte ptr ds:[0], right
+ 0161  74 15			    je move_right
+				    
+ 0163				 	move_up:
+ 0163  8B 05			        mov ax, ds:[di]
+ 0165  2D 0100			        sub ax,0100h
+ 0168  EB 15			        jmp checking
+
+ 016A				    move_down:
+ 016A  8B 05			        mov ax, ds:[di]
+ 016C  05 0100			        add ax,0100h
+ 016F  EB 0E			        jmp checking
+ 0171				    move_left:
+ 0171  8B 05			        mov ax, ds:[di]
+ 0173  83 E8 01			        sub ax,0001h
+ 0176  EB 07			        jmp checking
+
+ 0178				    move_right:
+ 0178  8B 05			        mov ax, ds:[di]
+ 017A  83 C0 01			        add ax,0001h
+ 017D  EB 00			        jmp checking	
+				        
+ 017F				checking: 
+					;Check if the snake hit the border
+ 017F  80 FC 00				cmp ah, 0
+ 0182  75 03 E9 015E		    je setGameover
+ 0187  80 FC 15			    cmp ah, 21
+ 018A  75 03 E9 0156		    je setGameover
+ 018F  3C 00			    cmp al, 0
+ 0191  75 03 E9 014F		    je setGameover
+ 0196  3C 27			    cmp al, 39
+ 0198  75 03 E9 0148		    je setGameover
+				    
+				    ;Check if the snake bite itself
+ 019D  8B 0E 0326 R		    mov cx, snake_head
+ 01A1  83 E9 04			    sub cx, 4
+ 01A4  BF 0002			    mov di, 2
+ 01A7  D1 E9				shr cx,1
+					
+ 01A9				    s0: 
+				        
+ 01A9  39 05			        cmp ds:[di], ax
+ 01AB  75 03 E9 0135		        je setGameover
+
+ 01B0  83 C7 02			        add di, 2
+
+ 01B3  E2 F4			        loop s0
+
+					;To get the food position in the map
+					;But i set it transparent in order to beautify the ui
+ 01B5  8B 1E 0322 R			mov bx,food_position
+ 01B9  50				push ax
+ 01BA  53				push bx
+ 01BB  33 DB				xor bx,bx 
+ 01BD  8B 1E 0322 R			mov bx,food_position
+ 01C1  33 C0				xor ax,ax
+ 01C3  8A C7				mov al,bh
+ 01C5  BF 0E38				mov di,3640
+ 01C8  E8 026F				call outputDecTransparent
+					 
+ 01CB  33 C0				xor ax,ax
+ 01CD  8A C3				mov al,bl
+ 01CF  BF 0E3E				mov di,3646
+ 01D2  E8 0265				call outputDecTransparent
+ 01D5  5B				pop bx
+ 01D6  58				pop ax
+					
+					;If the head of snake has the same location to the food position
+					;Then snake get the food, we should enlarge it
+ 01D7  3B C3				cmp ax,bx	
+						
+ 01D9  75 03 E9 00BB			je getFood
+
+ 01DE				backWardBody:
+					;Update the snake body position
+					;By backward the packs of snake
+ 01DE  8B 0E 0326 R			mov cx,snake_head
+					
+ 01E2  83 E9 04				sub cx,4
+ 01E5  BF 0002				mov di,2
+					
+ 01E8  D1 E9				shr cx,1
+ 01EA  50				push ax
+					;Set the backward one black
+ 01EB  B2 20				mov dl,' '
+ 01ED  B6 00				mov dh,black
+ 01EF  8B 1D				mov bx,ds:[di]
+ 01F1  E8 0138				call print	
+ 01F4				s5: 
+ 01F4  8B 55 02			        mov dx, ds:[di+2]
+ 01F7  89 15			        mov ds:[di], dx
+
+ 01F9  83 C7 02			        add di, 2
+
+ 01FC  E2 F6			        loop s5
+					;Other one has the normal color
+					;When color % 5 = 0, the snake is white
+					;When color % 5 = 1, the snake is blue
+					;When color % 5 = 2, the snake is greenplus
+					;When color % 5 = 3, the snake is pink
+					;When color % 5 = 4, the snake is zeroing the color
+ 01FE  83 3E 0339 R 00			cmp color,0
+ 0203  74 22				je	white_color
+ 0205  83 3E 0339 R 01			cmp color,1
+ 020A  74 38				je	blue_color
+ 020C  83 3E 0339 R 02			cmp color,2
+ 0211  74 4E				je	greenplus_color
+ 0213  83 3E 0339 R 03			cmp color,3
+ 0218  74 63				je  pink_color
+ 021A  83 3E 0339 R 04			cmp color,4
+ 021F  74 00				je	zeroing_color
+
+ 0221				zeroing_color:
+ 0221  C7 06 0339 R 0000		mov color,0
+ 0227				white_color:	
+ 0227  B2 20			    mov dl, ' '
+ 0229  B6 77			    mov dh, white
+ 022B  8B 1D			    mov bx, ds:[di]	
+ 022D  E8 00FC				call print
+					
+ 0230  58				pop ax
+ 0231  89 05				mov ds:[di],ax
+ 0233  B2 20				mov dl,' '
+ 0235  B6 44				mov dh,red
+ 0237  8B 1D				mov bx,ds:[di]
+ 0239  E8 00F0				call print
+ 023C  C6 06 032A R 77			mov current_color,white
+ 0241  E9 00A7				jmp endMove
+ 0244				blue_color:	
+ 0244  B2 20			    mov dl, ' '
+ 0246  B6 11			    mov dh, blue
+ 0248  8B 1D			    mov bx, ds:[di]	
+ 024A  E8 00DF				call print
+					
+ 024D  58				pop ax
+ 024E  89 05				mov ds:[di],ax
+ 0250  B2 20				mov dl,' '
+ 0252  B6 44				mov dh,red
+ 0254  8B 1D				mov bx,ds:[di]
+ 0256  E8 00D3				call print
+ 0259  C6 06 032A R 11			mov current_color,blue
+ 025E  E9 008A				jmp endMove
+ 0261				greenplus_color:	
+ 0261  B2 20			    mov dl, ' '
+ 0263  B6 33			    mov dh, greenplus
+ 0265  8B 1D			    mov bx, ds:[di]	
+ 0267  E8 00C2				call print
+					
+ 026A  58				pop ax
+ 026B  89 05				mov ds:[di],ax
+ 026D  B2 20				mov dl,' '
+ 026F  B6 44				mov dh,red
+ 0271  8B 1D				mov bx,ds:[di]
+ 0273  E8 00B6				call print
+ 0276  C6 06 032A R 33			mov current_color,greenplus
+ 027B  EB 6E				jmp endMove
+
+ 027D				pink_color:	
+ 027D  B2 20			    mov dl, ' '
+ 027F  B6 55			    mov dh, pink
+ 0281  8B 1D			    mov bx, ds:[di]	
+ 0283  E8 00A6				call print
+					
+ 0286  58				pop ax
+ 0287  89 05				mov ds:[di],ax
+ 0289  B2 20				mov dl,' '
+ 028B  B6 44				mov dh,red
+ 028D  8B 1D				mov bx,ds:[di]
+ 028F  E8 009A				call print
+					;mov color,0
+ 0292  C6 06 032A R 55			mov current_color,pink
+
+ 0297  EB 52				jmp endMove	
+ 0299				getFood:
+					;If get the food, set the current position of snake head
+					;To the food position
+					;Set color to select the snake's color
+ 0299  B2 20				mov dl,' '
+ 029B  8A 36 032A R			mov dh,current_color
+ 029F  8B 3E 0326 R			mov di,snake_head
+ 02A3  83 EF 02				sub di,2
+ 02A6  8B 1D				mov bx,ds:[di]
+ 02A8  E8 0081				call print
+					
+ 02AB  8B 3E 0326 R			mov di,snake_head
+ 02AF  A1 0322 R			mov ax,food_position
+ 02B2  89 05				mov ds:[di],ax
+					
+ 02B4  B2 20				mov dl,' '
+ 02B6  B6 44				mov dh,red
+ 02B8  8B 1D				mov bx,ds:[di]
+ 02BA  E8 006F				call print
+					;Update the snake_head (pointer of next head)
+ 02BD  83 C7 02				add di,2
+ 02C0  89 3E 0326 R			mov snake_head,di
+					;Add your score
+ 02C4  83 06 0328 R 0A			add score,10
+					;Inc color
+ 02C9  FF 06 0339 R			inc color
+					;Add the integral
+ 02CD  FF 06 0337 R			inc integral
+ 02D1  83 3E 0337 R 05			cmp integral,5
+ 02D6  77 02				ja	zeroing
+ 02D8  EB 06				jmp continue
+					;If the integral > 5, then zeroing it
+ 02DA				zeroing:
+ 02DA  C7 06 0337 R 0000		mov integral,0
+ 02E0				continue:
+ 02E0  E8 000F				call generateFood
+ 02E3  EB 06				jmp endMove
+					
+ 02E5				setGameover:
+ 02E5  C7 06 032D R 0001		mov gameover,1
+					
+ 02EB				endMove:
+					;call generateFood
+				 	popR
+ 02EB  5F		     1		pop di
+ 02EC  5E		     1		pop si
+ 02ED  5A		     1		pop dx
+ 02EE  59		     1		pop cx
+ 02EF  5B		     1		pop bx
+ 02F0  58		     1		pop ax
+ 02F1  C3				ret
+ 02F2				moveSnake endp
+
+
+ 02F2				generateFood proc near
+					;The proc for generate the food
+					;Include the position and print the food in the map
+					pushR
+ 02F2  50		     1		push ax
+ 02F3  53		     1		push bx
+ 02F4  51		     1		push cx
+ 02F5  52		     1		push dx
+ 02F6  56		     1		push si
+ 02F7  57		     1		push di
+ 02F8				setFoodPosition:
+					
+					;Check if the food position coincident with snake
+ 02F8  E8 00C9				call getRandPosition
+ 02FB  8B 0E 0326 R			mov cx,snake_head
+					
+ 02FF  83 E9 04				sub cx,4
+ 0302  BF 0002				mov di,2
+ 0305  D1 E9				shr cx,1
+
+
+ 0307					scan:
+ 0307  8B 05					mov ax,ds:[di]
+						;If coincident, then restart the segment
+ 0309  3B 06 0322 R				cmp ax,food_position
+ 030D  74 E9					jz setFoodPosition
+ 030F  47					inc di
+ 0310  47					inc di
+ 0311  E2 F4				loop scan
+					
+					;Print the food in the map
+ 0313  A1 0322 R			mov ax,food_position
+
+ 0316  8A 1E 0322 R			mov bl,byte ptr food_position
+ 031A  8A 3E 0323 R			mov bh,byte ptr food_position+1
+ 031E  B2 20				mov dl,' '
+ 0320  B6 11				mov dh,blue
+
+ 0322  E8 0007				call print
+					
+					
+					popR
+ 0325  5F		     1		pop di
+ 0326  5E		     1		pop si
+ 0327  5A		     1		pop dx
+ 0328  59		     1		pop cx
+ 0329  5B		     1		pop bx
+ 032A  58		     1		pop ax
+ 032B  C3				ret
+ 032C				generateFood endp
+
+
+ 032C				print proc near
+					;Proc for print the snake && food in the map
+					pushR
+ 032C  50		     1		push ax
+ 032D  53		     1		push bx
+ 032E  51		     1		push cx
+ 032F  52		     1		push dx
+ 0330  56		     1		push si
+ 0331  57		     1		push di
+					;The position formula is
+					;(bh*80+bl)*2
+					;Cause i replac a grid with a WORD
+ 0332  B0 50				mov al,80
+ 0334  F6 E7				mul bh
+ 0336  32 FF				xor bh,bh
+ 0338  D0 E3				shl bl,1
+ 033A  03 C3				add ax,bx
+					
+ 033C  56				push si
+ 033D  8B F0				mov si,ax
+ 033F  D1 E6				shl si,1
+					;Actually there has two blocks
+ 0341  26: 88 14			mov es:[si],dl
+ 0344  26: 88 74 01			mov es:[si+1],dh
+ 0348  26: 88 54 02			mov es:[si+2],dl
+ 034C  26: 88 74 03			mov es:[si+3],dh
+ 0350  5E				pop si
+					popR
+ 0351  5F		     1		pop di
+ 0352  5E		     1		pop si
+ 0353  5A		     1		pop dx
+ 0354  59		     1		pop cx
+ 0355  5B		     1		pop bx
+ 0356  58		     1		pop ax
+ 0357  C3				ret
+ 0358				print endp
+
+ 0358				setRowBackground proc 
+					;The proc for set the row of background
+					;The length of the line is 21
+					;The length of the column is 39
+					;Loop to draw the background symmetrically
+					;The setColBackground's algorithm is the same
+					pushR
+ 0358  50		     1		push ax
+ 0359  53		     1		push bx
+ 035A  51		     1		push cx
+ 035B  52		     1		push dx
+ 035C  56		     1		push si
+ 035D  57		     1		push di
+ 035E  B2 20				mov dl,' '
+ 0360  B6 33				mov dh,greenplus
+ 0362  B3 00				mov bl,0
+ 0364  B7 00				mov bh,0
+ 0366  B9 0027				mov cx,39
+ 0369				drawRow:
+ 0369  51				push cx
+ 036A  53				push bx
+ 036B  E8 FFBE				call print
+ 036E  5B				pop bx
+ 036F  53				push bx
+ 0370  80 C7 15				add bh,21
+ 0373  E8 FFB6				call print
+ 0376  5B				pop bx
+ 0377  FE C3				inc bl
+ 0379  59				pop cx
+ 037A  E2 ED				loop drawRow
+					popR
+ 037C  5F		     1		pop di
+ 037D  5E		     1		pop si
+ 037E  5A		     1		pop dx
+ 037F  59		     1		pop cx
+ 0380  5B		     1		pop bx
+ 0381  58		     1		pop ax
+ 0382  C3				ret
+ 0383				setRowBackground endp
+ 0383				setColBackground proc near
+					;The proc for set the col of background
+					pushR
+ 0383  50		     1		push ax
+ 0384  53		     1		push bx
+ 0385  51		     1		push cx
+ 0386  52		     1		push dx
+ 0387  56		     1		push si
+ 0388  57		     1		push di
+ 0389  B2 20				mov dl,' ' 
+ 038B  B6 33				mov dh,greenplus
+ 038D  B3 00				mov bl,0
+ 038F  B7 00				mov bh,0
+ 0391  B9 0016				mov cx,22
+ 0394				drawCol:
+ 0394  51				push cx
+ 0395  53				push bx
+ 0396  E8 FF93				call print
+ 0399  5B				pop bx
+ 039A  53				push bx
+ 039B  80 C3 27				add bl,39
+ 039E  E8 FF8B				call print
+ 03A1  5B				pop bx
+ 03A2  FE C7				inc bh
+ 03A4  59				pop cx
+ 03A5  E2 ED				loop drawCol
+					popR
+ 03A7  5F		     1		pop di
+ 03A8  5E		     1		pop si
+ 03A9  5A		     1		pop dx
+ 03AA  59		     1		pop cx
+ 03AB  5B		     1		pop bx
+ 03AC  58		     1		pop ax
+ 03AD  C3				ret
+ 03AE				setColBackground endp
+
+ 03AE				delayInput proc near
+					;The proc for delay input
+					;And control the snake moving speed
+					pushR
+ 03AE  50		     1		push ax
+ 03AF  53		     1		push bx
+ 03B0  51		     1		push cx
+ 03B1  52		     1		push dx
+ 03B2  56		     1		push si
+ 03B3  57		     1		push di
+					
+ 03B4  8B 0E 032F R			mov cx,speed
+ 03B8					input:
+ 03B8  E8 FD15					call getInput
+ 03BB  E2 FB					loop input
+					popR
+ 03BD  5F		     1		pop di
+ 03BE  5E		     1		pop si
+ 03BF  5A		     1		pop dx
+ 03C0  59		     1		pop cx
+ 03C1  5B		     1		pop bx
+ 03C2  58		     1		pop ax
+ 03C3  C3				ret
+ 03C4				delayInput endp
+
+ 03C4				getRandPosition proc near
+					;The proc for getting the food position
+					;randomly
+					pushR
+ 03C4  50		     1		push ax
+ 03C5  53		     1		push bx
+ 03C6  51		     1		push cx
+ 03C7  52		     1		push dx
+ 03C8  56		     1		push si
+ 03C9  57		     1		push di
+ 03CA				getRow:
+					;Get a random number through port 43h
+					;Get the required coordinates based on the boundary
+ 03CA  B8 0000				mov ax,0
+ 03CD  E6 43				out 43h,al
+ 03CF  E4 40				in al,40h
+ 03D1  E4 40				in al,40h
+ 03D3  E4 40				in al,40h
+					
+ 03D5  B3 12				mov bl,18
+					
+ 03D7  F6 F3				div bl
+					;ah store the remainder
+				    
+ 03D9  80 FC 01			    cmp ah,1
+ 03DC  72 EC			    jb getRow
+ 03DE  80 FC 12			    cmp ah,18
+ 03E1  77 E7			    ja getRow
+ 03E3  88 26 0323 R		    mov byte ptr food_position+1,ah
+ 03E7				getCol:	
+
+ 03E7  B8 0000				mov ax,0
+ 03EA  E6 43				out 43h,al
+ 03EC  E4 40				in al,40h
+ 03EE  E4 40				in al,40h
+ 03F0  E4 40				in al,40h
+					
+ 03F2  B3 25				mov bl,37
+					
+ 03F4  F6 F3				div bl
+					
+ 03F6  80 FC 01				cmp ah,1
+ 03F9  72 EC				jb getCol
+ 03FB  80 FC 25				cmp ah,37
+ 03FE  77 E7				ja getCol
+ 0400  88 26 0322 R			mov byte ptr food_position,ah
+				popR
+ 0404  5F		     1		pop di
+ 0405  5E		     1		pop si
+ 0406  5A		     1		pop dx
+ 0407  59		     1		pop cx
+ 0408  5B		     1		pop bx
+ 0409  58		     1		pop ax
+ 040A  C3				ret
+					
+ 040B				getRandPosition endp
+
+ 040B				outputDec proc near
+					;The proc for print the decimal in the screen
+					;Use in speed board && score board
+					 pushR
+ 040B  50		     1		push ax
+ 040C  53		     1		push bx
+ 040D  51		     1		push cx
+ 040E  52		     1		push dx
+ 040F  56		     1		push si
+ 0410  57		     1		push di
+					 ;di as the param
+ 0411  33 C9				 xor cx,cx
+ 0413				l1:
+ 0413  33 D2				 xor dx,dx
+ 0415  BE 000A				 mov si,10
+ 0418  F7 F6				 div si
+ 041A  52				 push dx
+ 041B  41				 inc cx
+ 041C  83 F8 00				 cmp ax,0
+ 041F  75 F2				 jne l1
+ 0421				l2:
+ 0421  5A				 pop dx
+ 0422  80 C2 30				 add dl,30h
+					 
+ 0425  B6 07				 mov dh,00000111b	 
+ 0427  26: 88 15			 mov es:[di],dl
+ 042A  26: 88 75 01			 mov es:[di+1],dh	 
+ 042E  83 C7 02				 add di,2 
+ 0431  E2 EE				 loop l2
+					 popR
+ 0433  5F		     1		pop di
+ 0434  5E		     1		pop si
+ 0435  5A		     1		pop dx
+ 0436  59		     1		pop cx
+ 0437  5B		     1		pop bx
+ 0438  58		     1		pop ax
+ 0439  C3				 ret
+ 043A				outputDec endp
+
+ 043A				outputDecTransparent proc near
+					 pushR
+ 043A  50		     1		push ax
+ 043B  53		     1		push bx
+ 043C  51		     1		push cx
+ 043D  52		     1		push dx
+ 043E  56		     1		push si
+ 043F  57		     1		push di
+					 ;di as the param
+					 ;Output decimal data transparently
+ 0440  33 C9				 xor cx,cx
+ 0442				l1:
+ 0442  33 D2				 xor dx,dx
+ 0444  BE 000A				 mov si,10
+ 0447  F7 F6				 div si
+ 0449  52				 push dx
+ 044A  41				 inc cx
+ 044B  83 F8 00				 cmp ax,0
+ 044E  75 F2				 jne l1
+ 0450				l2:
+ 0450  5A				 pop dx
+ 0451  80 C2 30				 add dl,30h
+ 0454  B6 00				 mov dh,0	 
+ 0456  26: 88 15			 mov es:[di],dl
+ 0459  26: 88 75 01			 mov es:[di+1],dh	 
+ 045D  83 C7 02				 add di,2 
+ 0460  E2 EE				 loop l2
+					 popR
+ 0462  5F		     1		pop di
+ 0463  5E		     1		pop si
+ 0464  5A		     1		pop dx
+ 0465  59		     1		pop cx
+ 0466  5B		     1		pop bx
+ 0467  58		     1		pop ax
+ 0468  C3				 ret
+ 0469				outputDecTransparent endp
+
+ 0469				showScore proc near
+					 ;The proc for showing the socre board
+					 pushR
+ 0469  50		     1		push ax
+ 046A  53		     1		push bx
+ 046B  51		     1		push cx
+ 046C  52		     1		push dx
+ 046D  56		     1		push si
+ 046E  57		     1		push di
+					 ;Set the score board's location
+ 046F  BE 0DC0				 mov si,3520	;(22*80+0)*2
+ 0472  B9 000E				 mov cx,nstring0
+ 0475  BF 0000				 mov di,0
+ 0478				setText:
+					;show "Your score is:"
+ 0478  8A 85 033D R			 mov al,string0[di]
+ 047C  26: 88 04			 mov byte ptr es:[si],al
+ 047F  26: C6 44 01 07			 mov byte ptr es:[si+1],07h
+ 0484  83 C6 02				 add si,2
+ 0487  47				 inc di
+ 0488  E2 EE				 loop setText
+ 048A				setScore:
+					;Set the current score in the screen
+ 048A  8B FE				 mov di,si
+ 048C  83 C7 04				 add di,4
+ 048F  A1 0328 R			 mov ax,score
+ 0492  E8 FF76				 call outputDec
+					 popR
+ 0495  5F		     1		pop di
+ 0496  5E		     1		pop si
+ 0497  5A		     1		pop dx
+ 0498  59		     1		pop cx
+ 0499  5B		     1		pop bx
+ 049A  58		     1		pop ax
+ 049B  C3				 ret
+ 049C				showScore endp
+
+ 049C				showSpeed proc near
+					;The proc for showing the speed board
+					pushR
+ 049C  50		     1		push ax
+ 049D  53		     1		push bx
+ 049E  51		     1		push cx
+ 049F  52		     1		push dx
+ 04A0  56		     1		push si
+ 04A1  57		     1		push di
+					;Set the speed board's location
+ 04A2  BE 0E60				mov si,3680	;23*80*2
+ 04A5  B9 0011				mov cx,nstring2
+ 04A8  BF 0000				mov di,0
+ 04AB				setText:
+					;Print "Current speed is"
+ 04AB  8A 85 0369 R			mov al,string2[di]
+ 04AF  26: 88 04			mov byte ptr es:[si],al
+ 04B2  26: C6 44 01 07			mov byte ptr es:[si+1],07h
+ 04B7  83 C6 02				add si,2
+ 04BA  47	inc di
+ 04BB  E2 EE				loop setText
+ 04BD				setSpeed: 
+					;Print the current speed
+ 04BD  8B FE				 mov di,si
+ 04BF  83 C7 04				 add di,4
+ 04C2  A1 0335 R			 mov ax,speed_level
+ 04C5  E8 FF43				 call outputDec
+					 popR
+ 04C8  5F		     1		pop di
+ 04C9  5E		     1		pop si
+ 04CA  5A		     1		pop dx
+ 04CB  59		     1		pop cx
+ 04CC  5B		     1		pop bx
+ 04CD  58		     1		pop ax
+ 04CE  C3				 ret 
+					popR
+ 04CF  5F		     1		pop di
+ 04D0  5E		     1		pop si
+ 04D1  5A		     1		pop dx
+ 04D2  59		     1		pop cx
+ 04D3  5B		     1		pop bx
+ 04D4  58		     1		pop ax
+ 04D5  C3				ret
+ 04D6				showSpeed endp
+
+ 04D6				gameOverP proc near
+					;The proc for showing the game over screen
+					pushR
+ 04D6  50		     1		push ax
+ 04D7  53		     1		push bx
+ 04D8  51		     1		push cx
+ 04D9  52		     1		push dx
+ 04DA  56		     1		push si
+ 04DB  57		     1		push di
+					;Set position
+ 04DC  BE 0532				mov si,1330	;(8*80+25)*2
+ 04DF  B9 000A				mov cx,nszgameover
+ 04E2  BF 0000				mov di,0
+ 04E5				setText:
+					;Print "game over!"
+ 04E5  8A 85 034B R			mov al,szgameover[di]
+ 04E9  26: 88 04			mov byte ptr es:[si],al
+ 04EC  26: C6 44 01 07			mov byte ptr es:[si+1],07h
+ 04F1  83 C6 02				add si,2
+ 04F4  47				inc di
+ 04F5  E2 EE				loop setText
+ 04F7  BE 0672				mov si,1650	;(10*80+25)*2
+ 04FA  B9 0014				mov cx,nstring1
+ 04FD  BF 0000				mov di,0
+ 0500				setString:
+					;Print "You have got point:"
+ 0500  8A 85 0355 R			mov al,string1[di]
+ 0504  26: 88 04			mov byte ptr es:[si],al
+ 0507  26: C6 44 01 07			mov byte ptr es:[si+1],07h
+ 050C  83 C6 02				add si,2
+ 050F  47				inc di
+ 0510  E2 EE				loop setString
+ 0512				setScore:
+					;Print the current score
+ 0512  8B FE				mov di,si
+ 0514  83 C7 04				add di,4
+ 0517  A1 0328 R			mov ax,score
+ 051A  E8 FEEE				call outputDec
+					popR
+ 051D  5F		     1		pop di
+ 051E  5E		     1		pop si
+ 051F  5A		     1		pop dx
+ 0520  59		     1		pop cx
+ 0521  5B		     1		pop bx
+ 0522  58		     1		pop ax
+ 0523  C3				ret
+ 0524				gameOverP endp
+ 0524				code ends
 				end start
 
 
 
-
-
-Microsoft (R) Macro Assembler Version 6.11		    06/24/20 22:55:13
+Microsoft (R) Macro Assembler Version 6.11		    06/27/20 11:40:35
 tempfile.asm						     Symbols 2 - 1
 
 
@@ -487,85 +1019,128 @@ Macros:
                 N a m e                 Type
 
 clearScreen  . . . . . . . . . .	Proc
-printBody  . . . . . . . . . . .	Proc
-printone . . . . . . . . . . . .	Proc
-print  . . . . . . . . . . . . .	Proc
-setColBackground . . . . . . . .	Proc
-setRowBackground . . . . . . . .	Proc
+popR . . . . . . . . . . . . . .	Proc
+pushR  . . . . . . . . . . . . .	Proc
 
 
 Segments and Groups:
 
                 N a m e                 Size     Length   Align   Combine Class
 
-DGROUP . . . . . . . . . . . . .	GROUP
-_DATA  . . . . . . . . . . . . .	16 Bit	 032C	  Word	  Public  'DATA'	
-_TEXT  . . . . . . . . . . . . .	16 Bit	 0281	  Word	  Public  'CODE'	
+code . . . . . . . . . . . . . .	16 Bit	 0524	  Para	  Private 
+data . . . . . . . . . . . . . .	16 Bit	 037A	  Para	  Private 
+stack  . . . . . . . . . . . . .	16 Bit	 00A0	  Para	  Private 
 
 
 Procedures,  parameters and locals:
 
                 N a m e                 Type     Value    Attr
 
-delay  . . . . . . . . . . . . .	P Near	 0260	  _TEXT	Length= 0021 Public
-  delayed_one_second . . . . . .	L Near	 0260	  _TEXT	
-  _delayed_one_second  . . . . .	L Near	 0272	  _TEXT	
-  _delayed_over  . . . . . . . .	L Near	 027C	  _TEXT	
-initSnake  . . . . . . . . . . .	P Near	 012F	  _TEXT	Length= 004C Public
-  init . . . . . . . . . . . . .	L Near	 0138	  _TEXT	
-  initBody . . . . . . . . . . .	L Near	 0144	  _TEXT	
-  printSnake . . . . . . . . . .	L Near	 0147	  _TEXT	
-main . . . . . . . . . . . . . .	P Far	 0000	  _TEXT	Length= 00D1 Public
-  drawRow  . . . . . . . . . . .	L Near	 001C	  _TEXT	
-  drawCol  . . . . . . . . . . .	L Near	 0072	  _TEXT	
-  l0 . . . . . . . . . . . . . .	L Near	 00C9	  _TEXT	
-movesnake  . . . . . . . . . . .	P Near	 017B	  _TEXT	Length= 00E5 Public
-  move_r . . . . . . . . . . . .	L Near	 0190	  _TEXT	
-  judgePlug  . . . . . . . . . .	L Near	 0196	  _TEXT	
-  s0 . . . . . . . . . . . . . .	L Near	 01C1	  _TEXT	
-  update . . . . . . . . . . . .	L Near	 01D0	  _TEXT	
-  s5 . . . . . . . . . . . . . .	L Near	 0202	  _TEXT	
-  gameend  . . . . . . . . . . .	L Near	 0259	  _TEXT	
-showScore  . . . . . . . . . . .	P Near	 00D1	  _TEXT	Length= 005E Public
-  setColorForScore . . . . . . .	L Near	 00DF	  _TEXT	
-  setScoreFont . . . . . . . . .	L Near	 00E7	  _TEXT	
-  setScore . . . . . . . . . . .	L Near	 010B	  _TEXT	
-  lset . . . . . . . . . . . . .	L Near	 0119	  _TEXT	
+delayInput . . . . . . . . . . .	P Near	 03AE	  code	Length= 0016 Public
+  input  . . . . . . . . . . . .	L Near	 03B8	  code	
+gameOverP  . . . . . . . . . . .	P Near	 04D6	  code	Length= 004E Public
+  setText  . . . . . . . . . . .	L Near	 04E5	  code	
+  setString  . . . . . . . . . .	L Near	 0500	  code	
+  setScore . . . . . . . . . . .	L Near	 0512	  code	
+generateFood . . . . . . . . . .	P Near	 02F2	  code	Length= 003A Public
+  setFoodPosition  . . . . . . .	L Near	 02F8	  code	
+  scan . . . . . . . . . . . . .	L Near	 0307	  code	
+getInput . . . . . . . . . . . .	P Near	 00D0	  code	Length= 00DF Public
+  left_key . . . . . . . . . . .	L Near	 00E7	  code	
+  right_key  . . . . . . . . . .	L Near	 00FA	  code	
+  up_key . . . . . . . . . . . .	L Near	 010D	  code	
+  down_key . . . . . . . . . . .	L Near	 0120	  code	
+  endGetInput  . . . . . . . . .	L Near	 0133	  code	
+getRandPosition  . . . . . . . .	P Near	 03C4	  code	Length= 0047 Public
+  getRow . . . . . . . . . . . .	L Near	 03CA	  code	
+  getCol . . . . . . . . . . . .	L Near	 03E7	  code	
+initSnake  . . . . . . . . . . .	P Near	 006C	  code	Length= 0064 Public
+  init . . . . . . . . . . . . .	L Near	 007D	  code	
+  initBody . . . . . . . . . . .	L Near	 0089	  code	
+  printSnake . . . . . . . . . .	L Near	 0089	  code	
+main . . . . . . . . . . . . . .	P Far	 0000	  code	Length= 006C Public
+  init . . . . . . . . . . . . .	L Near	 0000	  code	
+  game1  . . . . . . . . . . . .	L Near	 0031	  code	
+  accelerate . . . . . . . . . .	L Near	 004A	  code	
+  endgame  . . . . . . . . . . .	L Near	 005F	  code	
+moveSnake  . . . . . . . . . . .	P Near	 013A	  code	Length= 01B8 Public
+  move_up  . . . . . . . . . . .	L Near	 0163	  code	
+  move_down  . . . . . . . . . .	L Near	 016A	  code	
+  move_left  . . . . . . . . . .	L Near	 0171	  code	
+  move_right . . . . . . . . . .	L Near	 0178	  code	
+  checking . . . . . . . . . . .	L Near	 017F	  code	
+  s0 . . . . . . . . . . . . . .	L Near	 01A9	  code	
+  backWardBody . . . . . . . . .	L Near	 01DE	  code	
+  s5 . . . . . . . . . . . . . .	L Near	 01F4	  code	
+  zeroing_color  . . . . . . . .	L Near	 0221	  code	
+  white_color  . . . . . . . . .	L Near	 0227	  code	
+  blue_color . . . . . . . . . .	L Near	 0244	  code	
+  greenplus_color  . . . . . . .	L Near	 0261	  code	
+  pink_color . . . . . . . . . .	L Near	 027D	  code	
+  getFood  . . . . . . . . . . .	L Near	 0299	  code	
+  zeroing  . . . . . . . . . . .	L Near	 02DA	  code	
+  continue . . . . . . . . . . .	L Near	 02E0	  code	
+  setGameover  . . . . . . . . .	L Near	 02E5	  code	
+  endMove  . . . . . . . . . . .	L Near	 02EB	  code	
+outputDecTransparent . . . . . .	P Near	 043A	  code	Length= 002F Public
+  l1 . . . . . . . . . . . . . .	L Near	 0442	  code	
+  l2 . . . . . . . . . . . . . .	L Near	 0450	  code	
+outputDec  . . . . . . . . . . .	P Near	 040B	  code	Length= 002F Public
+  l1 . . . . . . . . . . . . . .	L Near	 0413	  code	
+  l2 . . . . . . . . . . . . . .	L Near	 0421	  code	
+print  . . . . . . . . . . . . .	P Near	 032C	  code	Length= 002C Public
+setColBackground . . . . . . . .	P Near	 0383	  code	Length= 002B Public
+  drawCol  . . . . . . . . . . .	L Near	 0394	  code	
+setRowBackground . . . . . . . .	P Near	 0358	  code	Length= 002B Public
+  drawRow  . . . . . . . . . . .	L Near	 0369	  code	
+showScore  . . . . . . . . . . .	P Near	 0469	  code	Length= 0033 Public
+  setText  . . . . . . . . . . .	L Near	 0478	  code	
+  setScore . . . . . . . . . . .	L Near	 048A	  code	
+showSpeed  . . . . . . . . . . .	P Near	 049C	  code	Length= 003A Public
+  setText  . . . . . . . . . . .	L Near	 04AB	  code	
+  setSpeed . . . . . . . . . . .	L Near	 04BD	  code	
 
 
 Symbols:
 
                 N a m e                 Type     Value    Attr
 
-@CodeSize  . . . . . . . . . . .	Number	 0000h	 
-@DataSize  . . . . . . . . . . .	Number	 0000h	 
-@Interface . . . . . . . . . . .	Number	 0000h	 
-@Model . . . . . . . . . . . . .	Number	 0002h	 
-@code  . . . . . . . . . . . . .	Text   	 _TEXT
-@data  . . . . . . . . . . . . .	Text   	 DGROUP
-@fardata?  . . . . . . . . . . .	Text   	 FAR_BSS
-@fardata . . . . . . . . . . . .	Text   	 FAR_DATA
-@stack . . . . . . . . . . . . .	Text   	 DGROUP
+acceleration . . . . . . . . . .	Word	 0333	  data	
 black  . . . . . . . . . . . . .	Number	 0000h	 
 blue . . . . . . . . . . . . . .	Number	 0011h	 
-down . . . . . . . . . . . . . .	Number	 5000h	 
-food_position  . . . . . . . . .	Word	 0322	  _DATA	
-gameover . . . . . . . . . . . .	Word	 032A	  _DATA	
+chgdirection . . . . . . . . . .	Word	 033B	  data	
+color  . . . . . . . . . . . . .	Word	 0339	  data	
+current_color  . . . . . . . . .	Byte	 032A	  data	
+down . . . . . . . . . . . . . .	Number	 0050h	 
+food_get . . . . . . . . . . . .	Word	 0331	  data	
+food_position  . . . . . . . . .	Word	 0322	  data	
+gameover . . . . . . . . . . . .	Word	 032D	  data	
 greenplus  . . . . . . . . . . .	Number	 0033h	 
 grren  . . . . . . . . . . . . .	Number	 0033h	 
-jblink . . . . . . . . . . . . .	Word	 0328	  _DATA	
-left . . . . . . . . . . . . . .	Number	 4B00h	 
-nscore . . . . . . . . . . . . .	Number	 0019h	 
+integral . . . . . . . . . . . .	Word	 0337	  data	
+jblink . . . . . . . . . . . . .	Word	 032B	  data	
+left . . . . . . . . . . . . . .	Number	 004Bh	 
+nstring0 . . . . . . . . . . . .	Number	 000Eh	 
+nstring1 . . . . . . . . . . . .	Number	 0014h	 
+nstring2 . . . . . . . . . . . .	Number	 0011h	 
+nszgameover  . . . . . . . . . .	Number	 000Ah	 
 pink . . . . . . . . . . . . . .	Number	 0055h	 
 red  . . . . . . . . . . . . . .	Number	 0044h	 
-right  . . . . . . . . . . . . .	Number	 4D00h	 
-score_position . . . . . . . . .	Number	 001Ah	 
-score  . . . . . . . . . . . . .	Word	 0326	  _DATA	
-snake_body . . . . . . . . . . .	Word	 0002	  _DATA	
-snake_direction  . . . . . . . .	Word	 0000	  _DATA	
-snake_length . . . . . . . . . .	Word	 0324	  _DATA	
-start  . . . . . . . . . . . . .	L Near	 0000	  _TEXT	
-up . . . . . . . . . . . . . . .	Number	 4800h	 
+right  . . . . . . . . . . . . .	Number	 004Dh	 
+score  . . . . . . . . . . . . .	Word	 0328	  data	
+snake_body_length  . . . . . . .	Word	 0324	  data	
+snake_body . . . . . . . . . . .	Word	 0002	  data	
+snake_direction  . . . . . . . .	Byte	 0000	  data	
+snake_head . . . . . . . . . . .	Word	 0326	  data	
+speed_level  . . . . . . . . . .	Word	 0335	  data	
+speed  . . . . . . . . . . . . .	Word	 032F	  data	
+start  . . . . . . . . . . . . .	L Near	 0000	  code	
+string0  . . . . . . . . . . . .	Byte	 033D	  data	
+string1  . . . . . . . . . . . .	Byte	 0355	  data	
+string2  . . . . . . . . . . . .	Byte	 0369	  data	
+szgameover . . . . . . . . . . .	Byte	 034B	  data	
+top  . . . . . . . . . . . . . .	Word	 00A0	  stack	
+up . . . . . . . . . . . . . . .	Number	 0048h	 
 white  . . . . . . . . . . . . .	Number	 0077h	 
 yellow . . . . . . . . . . . . .	Number	 0066h	 
 
